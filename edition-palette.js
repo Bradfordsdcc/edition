@@ -264,8 +264,22 @@
     return p;
   };
 
+  /* A reload is treated as "give me another one", while a normal load
+     keeps whatever the session already has. On a single-page site the
+     two are nearly the same thing, but this keeps the palette stable
+     if a second page ever gets added. */
+  function wasReloaded() {
+    try {
+      var nav = performance.getEntriesByType('navigation')[0];
+      if (nav && nav.type) return nav.type === 'reload';
+      /* older browsers */
+      if (performance.navigation) return performance.navigation.type === 1;
+    } catch (e) {}
+    return false;
+  }
+
   Edition.initPalette = function () {
-    var p = load();
+    var p = wasReloaded() ? null : load();
     if (!p) { p = Edition.makePalette(); save(p); }
     apply(p);
     wireNames();
