@@ -22,7 +22,8 @@
        "what did I just miss" will start */
     pastOrder: 'desc',
     recheckMs: 60000,        /* re-evaluate while the page sits open */
-    clockSeconds: true
+    clockSeconds: true,
+    clock12h: true           /* 12-hour with am/pm, matching the cards */
   };
   Edition.pageConfig = CFG;
 
@@ -166,8 +167,9 @@
       timeZone: CFG.tz, year: 'numeric', month: '2-digit', day: '2-digit'
     });
     timeFmt = new Intl.DateTimeFormat('en-US', {
-      timeZone: CFG.tz, hour12: false,
-      hour: '2-digit', minute: '2-digit',
+      timeZone: CFG.tz, hour12: !!CFG.clock12h,
+      hour: CFG.clock12h ? 'numeric' : '2-digit',
+      minute: '2-digit',
       second: CFG.clockSeconds ? '2-digit' : undefined
     });
   }
@@ -177,8 +179,15 @@
     var tEl = document.querySelector('[data-edition="clock"]');
     if (dEl) dEl.textContent = dateFmt.format(now);
     if (tEl) {
-      /* Intl can emit 24:00 at midnight in some engines */
-      tEl.textContent = timeFmt.format(now).replace(/^24:/, '00:');
+      var t = timeFmt.format(now);
+      if (CFG.clock12h) {
+        /* Intl gives "1:05:09 PM"; the cards read "1:05 pm" */
+        t = t.replace(/\u202F|\u00A0/g, ' ')
+             .replace(/\s*(AM|PM)$/i, function (_, ap) { return ' ' + ap.toLowerCase(); });
+      } else {
+        t = t.replace(/^24:/, '00:');   /* some engines emit 24:00 at midnight */
+      }
+      tEl.textContent = t;
     }
   }
 
