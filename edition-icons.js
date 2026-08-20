@@ -24,10 +24,12 @@ function clearL(ctx){
   ctx.fillStyle=CUR.paper;ctx.fillRect(-3,-3,106,106);
   ctx.strokeStyle=CUR.ink;ctx.fillStyle=CUR.ink;
   ctx.globalAlpha=1;ctx.lineWidth=0.5;ctx.lineCap='round';ctx.lineJoin='round';}
-function S(ctx,a,w){ctx.globalAlpha=a;
-  /* CUR.sw compensates for the display size so a given weight is the
-     same physical thickness whether the icon is drawn at 80 or 100 */
-  ctx.lineWidth=w*(CUR.sw||1);ctx.strokeStyle=CUR.ink;}
+function S(ctx,a,w){
+  ctx.globalAlpha=a;
+  /* CUR.sw keeps a given weight the same physical thickness whatever
+     size the icon is displayed at */
+  ctx.lineWidth=w*(CUR.sw||1);
+  ctx.strokeStyle=CUR.ink;}
 function seg(ctx,x0,y0,x1,y1){ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();}
 
 function icoFacet(ctx,t,p){
@@ -87,7 +89,10 @@ function icoLineGradient(ctx,t,p){
         +0.10*Math.sin((x-yy)*k*1.30-s*8.6);
       g=Math.max(0,Math.min(1,0.5+(g-0.5)*(p.contrast*0.01)));
       if(g<p.floorv*0.01){started=false;continue;}
-      S(ctx,Math.min(1,0.20+g*0.9),(p.minw+g*p.maxw)*0.05);
+      /* opacity 100 = fully opaque strokes, tone carried by weight alone */
+      var ga=(p.opacity===undefined?70:p.opacity)*0.01;
+      S(ctx,Math.min(1,(0.25+g*0.75)*ga+(ga>0.99?0.25:0)),
+        (p.minw+g*p.maxw)*0.05);
       if(!started){ctx.beginPath();ctx.moveTo(x,yy);started=true;}
       else{ctx.lineTo(x,yy);ctx.stroke();ctx.beginPath();ctx.moveTo(x,yy);}}}
   ctx.globalAlpha=1;
@@ -112,39 +117,45 @@ function icoLineRain(ctx,t,p){
       var bright=(k===0)?1:Math.max(0,1-k/n);
       if(bright<=0.04)continue;
       var w=(p.minw+bright*p.maxw)*0.05;
-      S(ctx,0.15+bright*0.85,w);
+      var ra=(p.opacity===undefined?70:p.opacity)*0.01;
+      S(ctx,Math.min(1,(0.15+bright*0.85)*ra+(ra>0.99?0.15:0)),w);
       seg(ctx,x,Math.max(-3,y0),x,Math.min(103,y1));}}
   ctx.globalAlpha=1;
 }
-function icoWeave(ctx,t,p){
+function icoInterference(ctx,t,p){
   clearL(ctx);
-  var n=p.count, sp=112/n;
-  var ph=t*p.speed*0.0004;
-  function over(i,j){
-    return Math.sin(i*0.9+j*0.7+ph*3+Math.sin(ph+i*0.3)*1.6)>0;}
-  function wx(i){return -6+i*sp+Math.sin(ph*1.3+i*0.5)*p.waver*0.1;}
-  function wy(j){return -6+j*sp+Math.cos(ph*1.1+j*0.6)*p.waver*0.1;}
-  /* warp first, in full */
-  S(ctx,p.alpha*0.01,p.weight*0.1);
-  for(var i=0;i<=n;i++)seg(ctx,wx(i),-8,wx(i),108);
-  /* at each crossing where the weft rides over, knock a hole in the
-     warp, then lay the weft across it */
-  var g=p.gap*0.1+p.weight*0.05;
-  for(var j=0;j<=n;j++){
-    var y=wy(j);
-    for(var i2=0;i2<=n;i2++){
-      if(!over(i2,j))continue;
-      ctx.globalAlpha=1;ctx.fillStyle=CUR.paper;
-      ctx.fillRect(wx(i2)-g,y-g*1.6,g*2,g*3.2);}
+  var drift=t*p.speed*0.0004;
+  var pairs=p.pairs;
+  for(var q=0;q<pairs;q++){
+    /* each pair of sources sits on its own slowly turning axis */
+    var ang=q*Math.PI/pairs+drift*(q%2?-0.6:1);
+    var d=p.sep+Math.sin(drift*1.7+q)*p.sepVar;
+    var cx=50+Math.cos(ang+1.2)*p.offset*(q?1:0);
+    var cy=50+Math.sin(ang+1.2)*p.offset*(q?1:0);
+    var ca=Math.cos(ang), sa=Math.sin(ang);
+    var c=d/2;
+    var lam=p.lambda*0.1;
+    var phase=Math.sin(drift*p.pulse*0.1)*lam*0.5;
     S(ctx,p.alpha*0.01,p.weight*0.1);
-    seg(ctx,-8,y,108,y);
-    /* and where the warp rides over, break the weft again */
-    for(var i3=0;i3<=n;i3++){
-      if(over(i3,j))continue;
-      ctx.globalAlpha=1;ctx.fillStyle=CUR.paper;
-      ctx.fillRect(wx(i3)-g*0.9,y-g,g*1.8,g*2);
-      S(ctx,p.alpha*0.01,p.weight*0.1);
-      seg(ctx,wx(i3),-8,wx(i3),108);}}
+    for(var n=-p.orders;n<=p.orders;n++){
+      var A=(n*lam+phase)/2;
+      if(Math.abs(A)>=c)continue;
+      var B=Math.sqrt(c*c-A*A);
+      for(var br=0;br<2;br++){
+        ctx.beginPath();
+        var started=false;
+        for(var k=-p.extent;k<=p.extent;k+=p.extent/28){
+          var lx=(br?1:-1)*A*Math.cosh(k);
+          var ly=B*Math.sinh(k);
+          var X=cx+lx*ca-ly*sa, Y=cy+lx*sa+ly*ca;
+          if(X<-30||X>130||Y<-30||Y>130){started=false;continue;}
+          if(!started){ctx.moveTo(X,Y);started=true;}else ctx.lineTo(X,Y);}
+        ctx.stroke();}}
+    if(p.sources>0){
+      ctx.globalAlpha=0.85;ctx.fillStyle=CUR.ink;
+      [[-c,0],[c,0]].forEach(function(s){
+        var X=cx+s[0]*ca, Y=cy+s[0]*sa;
+        ctx.beginPath();ctx.arc(X,Y,p.sources*0.3,0,7);ctx.fill();});}}
   ctx.globalAlpha=1;
 }
 function icoHarmonicSpeech(ctx,t,p){
@@ -187,48 +198,30 @@ function icoHarmonicSpeech(ctx,t,p){
       var x=a[0]+(b[0]-a[0])*ease, y=a[1]+(b[1]-a[1])*ease;
       i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
     ctx.closePath();ctx.stroke();}
-  for(var g=p.ghosts;g>=1;g--){
-    var ga=(p.ghostAlpha*0.01)/Math.pow(g,p.ghostFall*0.1);
-    curve(g*p.spread*0.01,Math.min(0.95,ga),p.weight*0.1*(p.ghostWeight*0.01));}
+  for(var g=p.ghosts;g>=1;g--)curve(g*p.spread*0.01,0.26/g,p.weight*0.1*0.75);
   curve(0,0.92,p.weight*0.1*(1+env*0.6));
   ctx.globalAlpha=1;
 }
-function icoMesh2(ctx,t,p){
+function icoModularSquare(ctx,t,p){
   clearL(ctx);
-  var N=p.points, Z=p.zoom*0.01, OX=p.offx, OY=p.offy;
-  var pts=[];
+  var N=p.points, S2=p.size;
+  var m=p.mbase+Math.sin(t*p.drift*0.00004)*p.range;
+  function perim(k){
+    var u=((k%N)+N)/N%1;
+    var s=u*4, side=Math.floor(s), f=s-side;
+    var a=50-S2/2, b=50+S2/2;
+    if(side===0)return [a+f*S2,a];
+    if(side===1)return [b,a+f*S2];
+    if(side===2)return [b-f*S2,b];
+    return [a,b-f*S2];}
+  S(ctx,p.alpha*0.01,p.weight*0.1);
+  ctx.beginPath();
   for(var i=0;i<N;i++){
-    var gx=Math.ceil(Math.sqrt(N));
-    var bx=-8+((i%gx)+0.5+(h1(i)-0.5)*0.9)*(116/gx);
-    var by=-8+(Math.floor(i/gx)+0.5+(h1(i+91)-0.5)*0.9)*(116/gx);
-    var dx=Math.sin(t*p.drift*0.0004+i*1.3)*p.wobble*0.1;
-    var dy=Math.cos(t*p.drift*0.00035+i*2.1)*p.wobble*0.1;
-    var X=bx+dx, Y=by+dy;
-    pts.push([50+OX+(X-50)*Z, 50+OY+(Y-50)*Z]);}
-  var reach=p.reach*Z;
-  if(p.fade>0){
-    /* every pair within reach, opacity easing to nothing at the limit */
-    for(var a=0;a<N;a++)for(var b=a+1;b<N;b++){
-      var d=Math.hypot(pts[a][0]-pts[b][0],pts[a][1]-pts[b][1]);
-      if(d>reach)continue;
-      var u=1-d/reach;
-      var e=u*u*(3-2*u);                        /* smoothstep */
-      S(ctx,e*p.alpha*0.01,p.weight*0.1*(0.5+e*0.8));
-      seg(ctx,pts[a][0],pts[a][1],pts[b][0],pts[b][1]);}
-  }else{
-    S(ctx,p.alpha*0.01,p.weight*0.1);
-    for(var i2=0;i2<N;i2++){
-      var d2=[];
-      for(var j=0;j<N;j++){
-        if(i2===j)continue;
-        d2.push([Math.hypot(pts[i2][0]-pts[j][0],pts[i2][1]-pts[j][1]),j]);}
-      d2.sort(function(x,y){return x[0]-y[0];});
-      for(var k=0;k<Math.min(p.k,d2.length);k++){
-        if(d2[k][1]<i2&&k<p.k-1)continue;
-        seg(ctx,pts[i2][0],pts[i2][1],pts[d2[k][1]][0],pts[d2[k][1]][1]);}}}
-  if(p.dots>0){ctx.globalAlpha=0.9;ctx.fillStyle=CUR.ink;
-    pts.forEach(function(q){ctx.beginPath();
-      ctx.arc(q[0],q[1],p.dots*0.25,0,7);ctx.fill();});}
+    var A=perim(i), B=perim(i*m);
+    ctx.moveTo(A[0],A[1]);ctx.lineTo(B[0],B[1]);}
+  ctx.stroke();
+  if(p.frame>0){S(ctx,0.8,p.weight*0.1*1.6);
+    ctx.strokeRect(50-S2/2,50-S2/2,S2,S2);}
   ctx.globalAlpha=1;
 }
 function icoAccordion2(ctx,t,p){
@@ -315,10 +308,6 @@ function icoTerrainSmooth(ctx,t,p){
       ctx.stroke();}}
   ctx.globalAlpha=1;
 }
-/* ============================================================
-   FIELD TRIP — spinning globe
-   orthographic sphere, graticule, axial tilt, orbiting satellites
-   ============================================================ */
 function icoGlobe(ctx,t,p){
   clearL(ctx);
   var R=p.radius*p.zoom*0.01;
@@ -417,24 +406,25 @@ function icoGlobe(ctx,t,p){
    LOCKED SETTINGS — one icon per category
    ============================================================ */
 var PARAMS = {
-  'fabrication': ["icoFacet",{slices:27,sides:14,radius:43,squash:65,twist:60,spin:10,
-    morph:16,drift:5,zoom:114,solid:1,edges:1,edgeEvery:1,weight:8}],
-  'hand-skills': ["icoLineGradient",{speed:42,scale:7,contrast:87,spacing:44,res:4,
-    waver:0,floorv:0,minw:3,maxw:12}],
-  'digital-skills': ["icoLineRain",{cols:80,smin:17,smax:42,tail:90,tailvar:50,dash:3,
-    duty:70,minw:4,maxw:12,xjit:3}],
-  'professional-skills': ["icoWeave",{count:11,gap:12,waver:33,speed:25,alpha:68,weight:5}],
+  'fabrication': ["icoFacet",{slices:23,sides:14,radius:49,squash:65,twist:104,spin:10,
+    morph:16,drift:5,zoom:165,solid:0,edges:1,edgeEvery:1,weight:10}],
+  'hand-skills': ["icoLineGradient",{opacity:100,speed:53,scale:7,contrast:200,spacing:56,
+    res:2,waver:11,floorv:0,minw:8,maxw:22}],
+  'digital-skills': ["icoLineRain",{opacity:100,cols:80,smin:17,smax:42,tail:90,tailvar:50,
+    dash:3,duty:70,minw:6,maxw:14,xjit:3}],
+  'professional-skills': ["icoInterference",{pairs:2,sep:50,sepVar:0,offset:10,lambda:73,
+    orders:10,extent:9,pulse:5,speed:10,alpha:100,weight:8,sources:0}],
   'talks': ["icoHarmonicSpeech",{rate:26,depth2:58,width:18,travel:21,morph:40,phase:27,
-    amp:110,second:0,third:0,steps:510,ghosts:5,spread:39,ghostAlpha:50,ghostFall:10,
-    ghostWeight:100,weight:8}],
-  'social': ["icoMesh2",{points:76,zoom:109,offx:0,offy:9,wobble:29,drift:90,fade:0,
-    reach:60,k:5,alpha:70,weight:6,dots:4}],
+    amp:110,second:0,third:0,steps:510,ghosts:5,spread:39,ghostAlpha:60,ghostFall:10,
+    ghostWeight:100,weight:10}],
+  'social': ["icoModularSquare",{points:52,mbase:3,range:3,drift:100,size:102,alpha:90,
+    weight:7,frame:0}],
   'culture': ["icoAccordion2",{wheels:1,wheelSpread:26,wheelScale:75,arrange:0,alternate:0,
     rateVar:0,spokes:65,spin:4,ease:35,easeRate:12,harm:5,squeeze:0,travel:0,inner:0,
-    innerVar:0,len:60,lenVar:0,reach:222,taper:0,invert:0,minw:9,maxw:14,alpha:78,
+    innerVar:0,len:60,lenVar:0,reach:222,taper:0,invert:0,minw:9,maxw:10,alpha:100,
     weight:8,hub:0}],
   'field-trip': ["icoTerrainSmooth",{pitch:45,camh:14,fov:51,speed:10,nx:60,nz:40,cell:20,
-    depth:16,amp:7,ridge:0,weight:6}],
+    depth:16,amp:7,ridge:0,weight:7}],
   /* alternate Field Trip treatment — point 'field-trip' here to use it */
   'field-trip-globe': ["icoGlobe",{radius:41,zoom:118,offx:0,offy:0,spin:13,tilt:9,elev:27,
     lat:6,lon:31,equator:0,limb:1,axis:0,axisExt:0,alpha:71,back:16,weight:7,sats:1,
@@ -442,8 +432,9 @@ var PARAMS = {
 };
 
 var FNS = {icoFacet:icoFacet, icoLineGradient:icoLineGradient, icoLineRain:icoLineRain,
-  icoWeave:icoWeave, icoHarmonicSpeech:icoHarmonicSpeech, icoMesh2:icoMesh2,
-  icoAccordion2:icoAccordion2, icoTerrainSmooth:icoTerrainSmooth, icoGlobe:icoGlobe};
+  icoInterference:icoInterference, icoHarmonicSpeech:icoHarmonicSpeech,
+  icoModularSquare:icoModularSquare, icoAccordion2:icoAccordion2,
+  icoTerrainSmooth:icoTerrainSmooth, icoGlobe:icoGlobe};
 
 var FALLBACK = 'fabrication';
 
