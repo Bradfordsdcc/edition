@@ -90,25 +90,33 @@
      family, lightness picks which of its three names, and anything
      with almost no saturation falls through to a neutral.
      ------------------------------------------------------------ */
+  /* 18 hue families x 6 variants (deep / mid / light, each muted or
+     vivid), plus separate warm and cool neutral ladders. Names are
+     derived rather than listed because the palettes are generated. */
   var FAMILIES = [
-    /*   0 */ ['Oxblood',   'Vermilion', 'Blush'],
-    /*  30 */ ['Umber',     'Ember',     'Apricot'],
-    /*  60 */ ['Bistre',    'Ochre',     'Custard'],
-    /*  90 */ ['Moss',      'Chartreuse','Lime Wash'],
-    /* 120 */ ['Pine',      'Grass',     'Mint'],
-    /* 150 */ ['Bottle',    'Jade',      'Seafoam'],
-    /* 180 */ ['Spruce',    'Teal',      'Powder'],
-    /* 210 */ ['Prussian',  'Cobalt',    'Sky'],
-    /* 240 */ ['Navy',      'Indigo',    'Periwinkle'],
-    /* 270 */ ['Aubergine', 'Violet',    'Lilac'],
-    /* 300 */ ['Plum',      'Magenta',   'Orchid'],
-    /* 330 */ ['Maroon',    'Rose',      'Shell']
+    /*   0 */ ['Oxblood','Crimson','Brick','Vermilion','Blush','Coral'],
+    /*  20 */ ['Mahogany','Scarlet','Terracotta','Persimmon','Salmon','Melon'],
+    /*  40 */ ['Umber','Burnt Orange','Clay','Tangerine','Apricot','Cantaloupe'],
+    /*  60 */ ['Bistre','Amber','Ochre','Marigold','Wheat','Honey'],
+    /*  80 */ ['Olive','Mustard','Khaki','Saffron','Custard','Lemon'],
+    /* 100 */ ['Moss','Chartreuse','Sage','Acid Green','Celadon','Lime Wash'],
+    /* 120 */ ['Pine','Kelly Green','Fern','Grass','Eucalyptus','Spring Green'],
+    /* 140 */ ['Bottle','Emerald','Sea Green','Jade','Pistachio','Mint'],
+    /* 160 */ ['Deep Teal','Viridian','Verdigris','Malachite','Seafoam','Aquamarine'],
+    /* 180 */ ['Spruce','Teal','Slate Teal','Turquoise','Powder','Aqua'],
+    /* 200 */ ['Petrol','Cerulean','Steel Blue','Peacock','Glacier','Sky'],
+    /* 220 */ ['Prussian','Cobalt','Denim','Azure','Cornflower','Bluebell'],
+    /* 240 */ ['Navy','Ultramarine','Slate Blue','Sapphire','Periwinkle','Powder Blue'],
+    /* 260 */ ['Midnight','Indigo','Dusk','Iris','Wisteria','Lavender'],
+    /* 280 */ ['Aubergine','Violet','Heather','Amethyst','Lilac','Mauve'],
+    /* 300 */ ['Plum','Magenta','Mulberry','Fuchsia','Orchid','Thistle'],
+    /* 320 */ ['Wine','Cerise','Raspberry','Hot Pink','Peony','Bubblegum'],
+    /* 340 */ ['Maroon','Ruby','Rosewood','Rose','Shell','Petal']
   ];
-  /* lightness ladder for anything with too little chroma to name by hue */
-  var NEUTRALS = [
-    [0.20, 'Ink'], [0.38, 'Graphite'], [0.55, 'Slate'],
-    [0.72, 'Ash'], [0.88, 'Linen'], [1.01, 'Bone']
-  ];
+  var WARM_N = [[0.16,'Ink'],[0.30,'Espresso'],[0.46,'Bark'],[0.62,'Taupe'],
+                [0.78,'Putty'],[0.90,'Oat'],[1.01,'Bone']];
+  var COOL_N = [[0.16,'Ink'],[0.30,'Charcoal'],[0.46,'Graphite'],[0.62,'Slate'],
+                [0.78,'Fog'],[0.90,'Mist'],[1.01,'Chalk']];
 
   function hexToRgb(h) {
     h = h.replace('#', '');
@@ -131,27 +139,29 @@
 
   Edition.nameColor = function (hex) {
     var rgb = hexToRgb(hex);
-    /* Judge colourfulness by raw chroma, not HSL saturation. HSL
-       saturation balloons near white, so a cream reads as 0.48 and
-       would get named Apricot when it is plainly a neutral. */
     var mx = Math.max(rgb[0], rgb[1], rgb[2]);
     var mn = Math.min(rgb[0], rgb[1], rgb[2]);
     var chroma = mx - mn;
     var hsl = rgbToHsl(rgb[0], rgb[1], rgb[2]);
     var h = hsl[0], l = hsl[2];
-    /* the bar for "colourful enough to name by hue" scales with
-       lightness: a very dark colour reaches far less absolute chroma
-       than a pale one, so a fixed threshold calls dark greens neutral */
-    var bar = 10 + 26 * l;
-    if (chroma < bar) {
-      for (var i = 0; i < NEUTRALS.length; i++) {
-        if (l < NEUTRALS[i][0]) return NEUTRALS[i][1];
-      }
-      return 'Bone';
+
+    /* Judge colourfulness by raw chroma, not HSL saturation, which
+       balloons near white and would name a cream "Apricot". The bar
+       scales with lightness because a dark colour can never reach as
+       much absolute chroma as a pale one. */
+    if (chroma < 10 + 28 * l) {
+      var set = (h < 70 || h >= 300) ? WARM_N : COOL_N;
+      for (var i = 0; i < set.length; i++) if (l < set[i][0]) return set[i][1];
+      return set[set.length - 1][1];
     }
-    var fam = FAMILIES[Math.round(h / 30) % 12];
-    var band = l < 0.34 ? 0 : (l < 0.60 ? 1 : 2);
-    return fam[band];
+
+    /* chroma as a fraction of the most a colour can reach at this
+       lightness — separates a muted oxblood from a vivid crimson */
+    var maxC = 255 * (1 - Math.abs(2 * l - 1));
+    var rel = maxC > 1 ? chroma / maxC : 0;
+    var vivid = rel > 0.78 ? 1 : 0;
+    var band = l < 0.32 ? 0 : (l < 0.62 ? 1 : 2);
+    return FAMILIES[Math.round(h / 20) % 18][band * 2 + vivid];
   };
 
   /* ------------------------------------------------------------
@@ -238,6 +248,16 @@
     try { sessionStorage.setItem(STORE_KEY, JSON.stringify(p)); } catch (e) {}
   }
 
+  /* Swap which colour is the ground — same pair, same contrast, the
+     page just flips between light-on-dark and dark-on-light. */
+  Edition.swapPalette = function () {
+    var p = Edition.palette;
+    if (!p) return null;
+    var q = { ink: p.paper, paper: p.ink, r: p.r, flip: !p.flip };
+    save(q); apply(q);
+    return q;
+  };
+
   Edition.shuffle = function () {
     var p = Edition.makePalette();
     save(p); apply(p);
@@ -252,6 +272,10 @@
     paintNames();
     document.querySelectorAll('[data-edition="shuffle"]').forEach(function (el) {
       el.addEventListener('click', function (e) { e.preventDefault(); Edition.shuffle(); });
+    });
+    document.querySelectorAll('[data-edition="swap"]').forEach(function (el) {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', function (e) { e.preventDefault(); Edition.swapPalette(); });
     });
   };
 
