@@ -301,15 +301,15 @@
     renderCommitted();
     var c = db();
     if (!c) return;
-    c.from('marks')
-      .update({ deleted_at: new Date().toISOString(), deleted_by: WHO })
-      .in('id', ids)
+    c.rpc('erase_marks', { ids: ids, eraser: WHO })
       .then(function (res) {
         if (res.error) {
           console.warn('[marks] erase rejected:', res.error.message,
                        '\nRun Edition.testErase() for the full picture.');
           MARKS = MARKS.concat(gone);      /* do not pretend it is gone */
           renderCommitted();
+        } else if (res.data === 0) {
+          console.warn('[marks] erase matched no rows.');
         }
       });
   }
@@ -317,11 +317,10 @@
   function restore(ids) {
     var c = db();
     if (!c || !ids.length) return;
-    c.from('marks')
-      .update({ deleted_at: null, deleted_by: null })
-      .in('id', ids)
+    c.rpc('restore_marks', { ids: ids })
       .then(function (res) {
         if (res.error) { console.warn('[marks] restore rejected:', res.error.message); return; }
+        if (res.data === 0) console.warn('[marks] nothing restored — past the 30s window.');
         load();
       });
   }
@@ -680,14 +679,17 @@
     var c = db();
     if (!c) return;
     if (!window.confirm('Erase every mark for ' + TERM + '?')) return;
-    c.from('marks')
-      .update({ deleted_at: new Date().toISOString(), deleted_by: 'clear-code' })
-      .eq('term', TERM).is('deleted_at', null)
-      .then(function (res) {
-        if (res.error) { alert('Clear failed: ' + res.error.message); return; }
-        MARKS = []; renderCommitted();
-        alert('Wall cleared for ' + TERM + '. Restorable from the SQL editor.');
-      });
+    load().then(function () {
+      var ids = MARKS.map(function (m) { return m.id; });
+      if (!ids.length) { alert('Nothing to clear.'); return; }
+      c.rpc('erase_marks', { ids: ids, eraser: 'clear-code' })
+        .then(function (res) {
+          if (res.error) { alert('Clear failed: ' + res.error.message); return; }
+          MARKS = []; renderCommitted();
+          alert('Cleared ' + res.data + ' marks for ' + TERM +
+                '. Restorable from the SQL editor.');
+        });
+    });
   }
 
   var rzTimer;
@@ -765,26 +767,21 @@
       id: id, term: TERM, who: WHO, type: 'stroke',
       data: { w: 0.001, pts: [[0.01, 0.01], [0.02, 0.02]] }
     }).then(function (ins) {
-      if (ins.error) { console.error('INSERT failed:', ins.error.message); throw ins.error; }
+      if (ins.error) { console.error('1. INSERT failed:', ins.error.message); throw ins.error; }
       console.log('1. INSERT ok');
-      return c.from('marks')
-        .update({ deleted_at: new Date().toISOString(), deleted_by: WHO })
-        .eq('id', id);
+      return c.rpc('erase_marks', { ids: [id], eraser: WHO });
     }).then(function (upd) {
+      if (!upd) return;
       if (upd.error) {
-        console.error('2. UPDATE rejected:', upd.error.message);
-        console.error('   Run supabase-fix-erase.sql in the SQL editor.');
+        console.error('2. erase_marks failed:', upd.error.message);
+        console.error('   Run supabase-erase-rpc.sql in the SQL editor.');
         return;
       }
-      console.log('2. UPDATE ok');
-      /* the row should now be invisible to the read policy */
+      console.log('2. erase_marks ok — ' + upd.data + ' row(s) erased');
       return c.from('marks').select('id').eq('id', id).then(function (sel) {
         if (sel.error) { console.error('3. SELECT failed:', sel.error.message); return; }
-        if (sel.data && sel.data.length) {
-          console.error('3. the mark is STILL readable — the erase did not stick');
-        } else {
-          console.log('3. mark is gone. Erasing works.');
-        }
+        if (sel.data && sel.data.length) console.error('3. the mark is STILL readable');
+        else console.log('3. mark is gone. Erasing works.');
       });
     });
   };
