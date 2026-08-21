@@ -1,21 +1,24 @@
 /* ============================================================
-   edition-marks.js  ·  phase 5b — read only
+   edition-marks.js  ·  phase 5c — drawing
 
-   Renders the shared annotation wall. No drawing yet.
-
-   Needs the Supabase client loaded first:
+   Needs the Supabase client first:
      <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-   Elements it looks for (all optional — it skips what is missing):
-     [data-edition="marks-toggle"]   show / hide the wall
-     [data-edition="marks-hide"]     hide it
-     [data-edition="dim-toggle"]     dim the cards
-     [data-edition="marks-box"]      the little control bar under the nav
-     [data-edition="marks-count"]    live mark count, if you want one
+   Hooks (all optional — missing ones are skipped):
+     [data-edition="marks-toggle"]                 show / hide the wall
+     [data-edition="marks-hide"]                   hide it
+     [data-edition="marks-box"]                    the toolbar, shown with the wall
+     [data-edition="tool"][data-tool="pen|erase"]  tools
+     [data-edition="sticker"][data-sticker="…"]    star | heart | reg
+     [data-edition="width"]                        range input, 1–5
+     [data-edition="undo"]                         undo the last thing you did
+     [data-edition="dim-toggle"]                   dim the cards
+     [data-edition="marks-count"]                  live count
 
-   Classes it sets on <html>:
-     .marks-on      the wall is visible
-     .cards-dim     cards dimmed so the wall reads
+   The script only ever toggles the class `is-active` on tool
+   buttons. Every visual decision stays in your CSS.
+
+   Classes set on <html>:  .marks-on  .cards-dim  .marks-armed
    ============================================================ */
 (function () {
   'use strict';
@@ -25,16 +28,35 @@
   var CFG = {
     url: 'https://jtelqybifbiazhmltear.supabase.co',
     key: 'sb_publishable_YS4zJgl-oPOL2GRKvhNqoQ_uD85_ZEO',
-    clearCode: 'kumeyaay',      /* ?clear=kumeyaay wipes the wall */
+    clearCode: 'kumeyaay',
     pollMs: 8000,
-    maxMarks: 4000
+    maxMarks: 4000,
+
+    /* stroke weights as a fraction of the square. On a 1440 square
+       these are roughly 1.9 / 2.9 / 4.3 / 6.3 / 9.2 px. */
+    weights: [0.0013, 0.0020, 0.0030, 0.0044, 0.0064],
+    defaultWeight: 2,
+
+    /* stickers are a fixed size — deliberately not tied to the weight
+       slider, so the slider only ever means "pen" */
+    stickerSize: 0.045,
+    stickerWeight: 0.0022,
+
+    /* the eraser reaches further with a heavier pen selected */
+    eraseBase: 0.018,
+    eraseGrowth: 0.35,
+
+    /* how close together captured points may be before one is dropped.
+       A raw drag emits hundreds of near-identical points; unsimplified
+       strokes would blow past the 20KB row limit and make the wall slow
+       to load. */
+    minPointGap: 0.0035,
+    simplifyTol: 0.0016,
+
+    undoWindowMs: 28000      /* must stay under the 30s SQL policy */
   };
   Edition.marksConfig = CFG;
 
-  /* ------------------------------------------------------------
-     Term. Marks are stamped with it so a semester can be cleared
-     in one go without touching anything else.
-     ------------------------------------------------------------ */
   function currentTerm() {
     var d = new Date(), m = d.getMonth();
     return d.getFullYear() + '-' + (m < 5 ? 'spring' : (m < 7 ? 'summer' : 'fall'));
@@ -42,15 +64,19 @@
   var TERM = currentTerm();
   Edition.marksTerm = TERM;
 
-  /* ------------------------------------------------------------
-     Canvases
+  function who() {
+    try {
+      var k = localStorage.getItem('edition:who');
+      if (!k) { k = 'u' + Math.random().toString(36).slice(2, 10);
+                localStorage.setItem('edition:who', k); }
+      return k;
+    } catch (e) { return 'u' + Math.random().toString(36).slice(2, 10); }
+  }
+  var WHO = who();
 
-     Two of them. The committed layer holds every saved mark and is
-     only redrawn when the data or the viewport changes; the live
-     layer is for the stroke currently under the pen. Repainting
-     hundreds of paths every frame would cost far more than it is
-     worth on a phone.
-     ------------------------------------------------------------ */
+  /* ============================================================
+     CANVASES
+     ============================================================ */
   var wrap, cCommit, cLive, xCommit, xLive;
   var side = 0, offX = 0, offY = 0, dpr = 1;
 
@@ -60,7 +86,6 @@
     wrap.style.cssText =
       'position:fixed;inset:0;z-index:0;pointer-events:none;' +
       'opacity:0;transition:opacity .35s ease';
-
     cCommit = document.createElement('canvas');
     cLive = document.createElement('canvas');
     [cCommit, cLive].forEach(function (c) {
@@ -72,10 +97,6 @@
     document.body.insertBefore(wrap, document.body.firstChild);
   }
 
-  /* The drawing surface is a square that covers the viewport: wide
-     screens lose the bottom of it, tall screens lose the sides. Marks
-     are stored 0..1 within that square, so they land in the same place
-     relative to each other on every device. */
   function measure() {
     var w = window.innerWidth, h = window.innerHeight;
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -90,11 +111,9 @@
   }
   function X(u) { return offX + u * side; }
   function Y(v) { return offY + v * side; }
-  Edition.marksProject = function (u, v) { return [X(u), Y(v)]; };
+  function toU(px) { return (px - offX) / side; }
+  function toV(py) { return (py - offY) / side; }
 
-  /* ------------------------------------------------------------
-     Ink colour, kept in step with the palette
-     ------------------------------------------------------------ */
   var INK = '#141210';
   function readInk() {
     var s = getComputedStyle(document.documentElement);
@@ -107,21 +126,19 @@
     renderCommitted();
   });
 
-  /* ------------------------------------------------------------
-     Sticker shapes — fine linework, matching the icon language
-     ------------------------------------------------------------ */
+  /* ============================================================
+     STICKERS
+     ============================================================ */
   var STICKERS = {
-    /* a pointed star, eight rays, no fill */
     star: function (c, s) {
-      var n = 8;
       c.beginPath();
-      for (var i = 0; i < n * 2; i++) {
-        var a = -Math.PI / 2 + i / (n * 2) * Math.PI * 2;
+      for (var i = 0; i < 16; i++) {
+        var a = -Math.PI / 2 + i / 16 * Math.PI * 2;
         var r = (i % 2 ? s * 0.16 : s * 0.5);
         i ? c.lineTo(Math.cos(a) * r, Math.sin(a) * r)
           : c.moveTo(Math.cos(a) * r, Math.sin(a) * r);
       }
-      c.closePath(); c.stroke();
+      c.closePath(); c.fill();
     },
     heart: function (c, s) {
       var k = s * 0.5;
@@ -129,14 +146,6 @@
       c.moveTo(0, k * 0.85);
       c.bezierCurveTo(-k * 1.25, k * 0.05, -k * 0.62, -k * 0.92, 0, -k * 0.3);
       c.bezierCurveTo(k * 0.62, -k * 0.92, k * 1.25, k * 0.05, 0, k * 0.85);
-      c.stroke();
-    },
-    arrow: function (c, s) {
-      var k = s * 0.5;
-      c.beginPath();
-      c.moveTo(-k * 0.85, k * 0.65); c.lineTo(k * 0.8, -k * 0.7);
-      c.moveTo(k * 0.16, -k * 0.78); c.lineTo(k * 0.86, -k * 0.78);
-      c.lineTo(k * 0.86, -k * 0.1);
       c.stroke();
     },
     reg: function (c, s) {
@@ -150,20 +159,18 @@
   };
   Edition.markStickers = STICKERS;
 
-  /* ------------------------------------------------------------
-     Drawing a mark
-     ------------------------------------------------------------ */
   function drawMark(ctx, m) {
     var d = m.data || m;
     ctx.strokeStyle = INK;
+    ctx.fillStyle = INK;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.globalAlpha = 1;
 
-    if (m.type === 'stroke' || d.pts) {
+    if (m.type === 'stroke') {
       var pts = d.pts || [];
       if (pts.length < 2) return;
-      ctx.lineWidth = Math.max(0.6, (d.w || 0.0022) * side);
+      ctx.lineWidth = Math.max(0.7, (d.w || 0.002) * side);
       ctx.beginPath();
       for (var i = 0; i < pts.length; i++) {
         var x = X(pts[i][0]), y = Y(pts[i][1]);
@@ -172,16 +179,13 @@
       ctx.stroke();
       return;
     }
-
     if (m.type === 'sticker') {
       var fn = STICKERS[d.k];
       if (!fn) return;
-      var s = (d.s || 0.05) * side;
       ctx.save();
       ctx.translate(X(d.u), Y(d.v));
-      if (d.rot) ctx.rotate(d.rot);
-      ctx.lineWidth = Math.max(0.6, (d.w || 0.0022) * side);
-      fn(ctx, s);
+      ctx.lineWidth = Math.max(0.7, (d.w || CFG.stickerWeight) * side);
+      fn(ctx, (d.s || CFG.stickerSize) * side);
       ctx.restore();
     }
   }
@@ -190,17 +194,19 @@
   var MARKS = [];
   function renderCommitted() {
     if (!xCommit) return;
-    xCommit.setTransform(dpr, 0, 0, dpr, 0, 0);
     xCommit.clearRect(0, 0, window.innerWidth, window.innerHeight);
     for (var i = 0; i < MARKS.length; i++) drawMark(xCommit, MARKS[i]);
     var el = document.querySelector('[data-edition="marks-count"]');
     if (el) el.textContent = MARKS.length;
   }
+  function clearLive() {
+    if (xLive) xLive.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  }
   Edition.renderMarks = renderCommitted;
 
-  /* ------------------------------------------------------------
-     Supabase
-     ------------------------------------------------------------ */
+  /* ============================================================
+     SUPABASE
+     ============================================================ */
   var sb = null;
   function db() {
     if (sb) return sb;
@@ -212,7 +218,7 @@
   var loading = false;
   function load() {
     var c = db();
-    if (!c || loading) return Promise.resolve();
+    if (!c || loading || drawing) return Promise.resolve();
     loading = true;
     return c.from('marks')
       .select('id,type,data,ts')
@@ -222,37 +228,237 @@
       .then(function (res) {
         loading = false;
         if (res.error) { console.warn('[marks] load:', res.error.message); return; }
-        MARKS = res.data || [];
+        var remote = res.data || [];
+        /* keep anything of ours that has not round-tripped yet */
+        var ids = {};
+        remote.forEach(function (r) { ids[r.id] = 1; });
+        var pending = MARKS.filter(function (m) { return m.__pending && !ids[m.id]; });
+        MARKS = remote.concat(pending);
         renderCommitted();
       }, function (e) { loading = false; console.warn('[marks] load failed', e); });
   }
   Edition.loadMarks = load;
 
-  /* ------------------------------------------------------------
-     Secret clear. Erases in bulk rather than deleting, so the wall
-     can still be brought back from the SQL editor afterwards.
-     ------------------------------------------------------------ */
-  function maybeClear() {
-    var code = new URLSearchParams(location.search).get('clear');
-    if (!code || code !== CFG.clearCode) return;
+  function rid() {
+    return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  }
+
+  /* Marks appear immediately and sync in the background — nothing ever
+     waits on the network. If the write fails the mark is pulled back
+     out, so the wall never lies about what was saved. */
+  function commit(mark) {
+    mark.__pending = true;
+    MARKS.push(mark);
+    renderCommitted();
     var c = db();
     if (!c) return;
-    if (!window.confirm('Erase every mark for ' + TERM + '?')) return;
-    c.from('marks')
-      .update({ deleted_at: new Date().toISOString(), deleted_by: 'clear-code' })
-      .eq('term', TERM)
-      .is('deleted_at', null)
-      .then(function (res) {
-        if (res.error) { alert('Clear failed: ' + res.error.message); return; }
-        MARKS = [];
+    c.from('marks').insert({
+      id: mark.id, term: TERM, who: WHO, type: mark.type, data: mark.data
+    }).then(function (res) {
+      if (res.error) {
+        console.warn('[marks] save failed:', res.error.message);
+        MARKS = MARKS.filter(function (m) { return m.id !== mark.id; });
         renderCommitted();
-        alert('Wall cleared for ' + TERM + '. It can be restored from the SQL editor.');
+        return;
+      }
+      delete mark.__pending;
+    });
+  }
+
+  function softDelete(ids) {
+    if (!ids.length) return;
+    MARKS = MARKS.filter(function (m) { return ids.indexOf(m.id) === -1; });
+    renderCommitted();
+    var c = db();
+    if (!c) return;
+    c.from('marks')
+      .update({ deleted_at: new Date().toISOString(), deleted_by: WHO })
+      .in('id', ids)
+      .then(function (res) {
+        if (res.error) console.warn('[marks] erase failed:', res.error.message);
       });
   }
 
-  /* ------------------------------------------------------------
+  function restore(ids) {
+    var c = db();
+    if (!c || !ids.length) return;
+    c.from('marks')
+      .update({ deleted_at: null, deleted_by: null })
+      .in('id', ids)
+      .then(function (res) {
+        if (res.error) { console.warn('[marks] restore failed:', res.error.message); return; }
+        load();
+      });
+  }
+
+  /* ============================================================
+     UNDO — session only, as agreed
+     ============================================================ */
+  var UNDO = [];
+  function pushUndo(entry) {
+    entry.at = Date.now();
+    UNDO.push(entry);
+    if (UNDO.length > 60) UNDO.shift();
+  }
+  function undo() {
+    var e = UNDO.pop();
+    if (!e) return;
+    if (e.kind === 'draw') { softDelete([e.id]); return; }
+    if (e.kind === 'erase') {
+      /* the database only allows un-erasing very recently, so an old
+         entry is skipped rather than half-applied */
+      if (Date.now() - e.at > CFG.undoWindowMs) { undo(); return; }
+      restore(e.ids);
+    }
+  }
+  Edition.undoMark = undo;
+
+  /* ============================================================
+     TOOLS
+     ============================================================ */
+  var tool = null;            /* 'pen' | 'erase' | null */
+  var sticker = null;         /* 'star' | 'heart' | 'reg' | null */
+  var weight = CFG.defaultWeight;
+  var drawing = false, live = null;
+
+  function armed() { return tool !== null || sticker !== null; }
+
+  function syncArm() {
+    var on = armed();
+    wrap.style.pointerEvents = on ? 'auto' : 'none';
+    /* stop the browser scrolling the page from a drag on the canvas */
+    wrap.style.touchAction = on ? 'none' : '';
+    document.documentElement.classList.toggle('marks-armed', on);
+    document.querySelectorAll('[data-edition="tool"]').forEach(function (el) {
+      el.classList.toggle('is-active', el.getAttribute('data-tool') === tool);
+    });
+    document.querySelectorAll('[data-edition="sticker"]').forEach(function (el) {
+      el.classList.toggle('is-active', el.getAttribute('data-sticker') === sticker);
+    });
+  }
+
+  /* tools and stickers are mutually exclusive; clicking the active one
+     releases it, which is also how you get scrolling back on a phone */
+  function selectTool(t) {
+    if (tool === t) { tool = null; } else { tool = t; sticker = null; }
+    syncArm();
+  }
+  function selectSticker(k) {
+    if (sticker === k) { sticker = null; } else { sticker = k; tool = null; }
+    syncArm();
+  }
+  Edition.selectTool = selectTool;
+  Edition.selectSticker = selectSticker;
+
+  /* ---------- path simplification (Douglas–Peucker) ---------- */
+  function perp(p, a, b) {
+    var dx = b[0] - a[0], dy = b[1] - a[1];
+    var L = dx * dx + dy * dy;
+    if (L === 0) return Math.hypot(p[0] - a[0], p[1] - a[1]);
+    var t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+  }
+  function simplify(pts, tol) {
+    if (pts.length < 3) return pts;
+    var keep = new Array(pts.length);
+    keep[0] = keep[pts.length - 1] = true;
+    (function rec(lo, hi) {
+      if (hi <= lo + 1) return;
+      var worst = -1, idx = -1;
+      for (var i = lo + 1; i < hi; i++) {
+        var d = perp(pts[i], pts[lo], pts[hi]);
+        if (d > worst) { worst = d; idx = i; }
+      }
+      if (worst > tol) { keep[idx] = true; rec(lo, idx); rec(idx, hi); }
+    })(0, pts.length - 1);
+    return pts.filter(function (_, i) { return keep[i]; });
+  }
+
+  /* ---------- erasing ---------- */
+  function eraseRadius() {
+    return CFG.eraseBase * (1 + (weight - 1) * CFG.eraseGrowth);
+  }
+  function eraseAt(u, v) {
+    var r = eraseRadius(), hit = [];
+    for (var i = 0; i < MARKS.length; i++) {
+      var m = MARKS[i], d = m.data || {};
+      if (m.type === 'stroke') {
+        var pts = d.pts || [];
+        for (var k = 0; k < pts.length; k++) {
+          if (Math.hypot(pts[k][0] - u, pts[k][1] - v) < r) { hit.push(m.id); break; }
+        }
+      } else if (m.type === 'sticker') {
+        if (Math.hypot(d.u - u, d.v - v) < r + (d.s || CFG.stickerSize) * 0.5) hit.push(m.id);
+      }
+    }
+    if (hit.length) { softDelete(hit); pushUndo({ kind: 'erase', ids: hit }); }
+  }
+
+  /* ---------- pointer ---------- */
+  function pos(e) {
+    var r = cLive.getBoundingClientRect();
+    return [toU(e.clientX - r.left), toV(e.clientY - r.top)];
+  }
+
+  function onDown(e) {
+    if (!armed()) return;
+    e.preventDefault();
+    var p = pos(e);
+
+    if (sticker) {
+      var m = {
+        id: rid(), type: 'sticker',
+        data: { k: sticker, u: +p[0].toFixed(4), v: +p[1].toFixed(4),
+                s: CFG.stickerSize, w: CFG.stickerWeight }
+      };
+      commit(m);
+      pushUndo({ kind: 'draw', id: m.id });
+      sticker = null;               /* stickers release after placing */
+      syncArm();
+      return;
+    }
+    if (tool === 'erase') { drawing = true; eraseAt(p[0], p[1]); return; }
+    if (tool === 'pen') {
+      drawing = true;
+      live = { w: CFG.weights[weight - 1], pts: [p] };
+      try { cLive.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+  }
+
+  function onMove(e) {
+    if (!drawing) return;
+    e.preventDefault();
+    var p = pos(e);
+    if (tool === 'erase') { eraseAt(p[0], p[1]); return; }
+    if (!live) return;
+    var last = live.pts[live.pts.length - 1];
+    if (Math.hypot(p[0] - last[0], p[1] - last[1]) < CFG.minPointGap) return;
+    live.pts.push(p);
+    /* only the light layer repaints while the pen is down */
+    clearLive();
+    drawMark(xLive, { type: 'stroke', data: live });
+  }
+
+  function onUp() {
+    if (!drawing) return;
+    drawing = false;
+    if (tool === 'erase' || !live) { live = null; return; }
+    var pts = simplify(live.pts, CFG.simplifyTol).map(function (p) {
+      return [+p[0].toFixed(4), +p[1].toFixed(4)];
+    });
+    var w = live.w;
+    live = null;
+    clearLive();
+    if (pts.length < 2) return;
+    var m = { id: rid(), type: 'stroke', data: { w: w, pts: pts } };
+    commit(m);
+    pushUndo({ kind: 'draw', id: m.id });
+  }
+
+  /* ============================================================
      UI
-     ------------------------------------------------------------ */
+     ============================================================ */
   var visible = false, dimmed = false, poll = null;
 
   function setVisible(on) {
@@ -261,17 +467,14 @@
     wrap.style.opacity = visible ? '1' : '0';
     var box = document.querySelector('[data-edition="marks-box"]');
     if (box) box.style.display = visible ? '' : 'none';
-    if (!visible) setDim(false);
-
+    if (!visible) {
+      setDim(false);
+      tool = null; sticker = null; syncArm();
+    }
     clearInterval(poll);
     if (visible) {
       load();
       poll = setInterval(function () { if (!document.hidden) load(); }, CFG.pollMs);
-    }
-    var t = document.querySelector('[data-edition="marks-toggle"]');
-    if (t && t.getAttribute('data-label-on')) {
-      t.textContent = visible ? t.getAttribute('data-label-on')
-                              : t.getAttribute('data-label-off') || t.textContent;
     }
   }
   function setDim(on) {
@@ -285,23 +488,67 @@
 
   function wire() {
     var t = document.querySelector('[data-edition="marks-toggle"]');
-    if (t) t.addEventListener('click', function (e) {
-      e.preventDefault(); setVisible(!visible);
-    });
+    if (t) t.addEventListener('click', function (e) { e.preventDefault(); setVisible(!visible); });
     var h = document.querySelector('[data-edition="marks-hide"]');
-    if (h) h.addEventListener('click', function (e) {
-      e.preventDefault(); setVisible(false);
-    });
+    if (h) h.addEventListener('click', function (e) { e.preventDefault(); setVisible(false); });
     var d = document.querySelector('[data-edition="dim-toggle"]');
-    if (d) d.addEventListener('click', function (e) {
-      e.preventDefault(); setDim(!dimmed);
+    if (d) d.addEventListener('click', function (e) { e.preventDefault(); setDim(!dimmed); });
+    var u = document.querySelector('[data-edition="undo"]');
+    if (u) u.addEventListener('click', function (e) { e.preventDefault(); undo(); });
+
+    document.querySelectorAll('[data-edition="tool"]').forEach(function (el) {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', function (e) {
+        e.preventDefault(); selectTool(el.getAttribute('data-tool'));
+      });
     });
+    document.querySelectorAll('[data-edition="sticker"]').forEach(function (el) {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', function (e) {
+        e.preventDefault(); selectSticker(el.getAttribute('data-sticker'));
+      });
+    });
+    var w = document.querySelector('[data-edition="width"]');
+    if (w) {
+      weight = parseInt(w.value, 10) || CFG.defaultWeight;
+      w.addEventListener('input', function () {
+        weight = Math.max(1, Math.min(CFG.weights.length, parseInt(w.value, 10) || 2));
+      });
+    }
+
+    cLive.addEventListener('pointerdown', onDown);
+    cLive.addEventListener('pointermove', onMove);
+    cLive.addEventListener('pointerup', onUp);
+    cLive.addEventListener('pointercancel', onUp);
+    cLive.addEventListener('pointerleave', onUp);
+
+    document.addEventListener('keydown', function (e) {
+      if (!visible) return;
+      if (e.key === 'Escape') { tool = null; sticker = null; syncArm(); }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+    });
+  }
+
+  function maybeClear() {
+    var code = new URLSearchParams(location.search).get('clear');
+    if (!code || code !== CFG.clearCode) return;
+    var c = db();
+    if (!c) return;
+    if (!window.confirm('Erase every mark for ' + TERM + '?')) return;
+    c.from('marks')
+      .update({ deleted_at: new Date().toISOString(), deleted_by: 'clear-code' })
+      .eq('term', TERM).is('deleted_at', null)
+      .then(function (res) {
+        if (res.error) { alert('Clear failed: ' + res.error.message); return; }
+        MARKS = []; renderCommitted();
+        alert('Wall cleared for ' + TERM + '. Restorable from the SQL editor.');
+      });
   }
 
   var rzTimer;
   function onResize() {
     clearTimeout(rzTimer);
-    rzTimer = setTimeout(function () { measure(); renderCommitted(); }, 120);
+    rzTimer = setTimeout(function () { measure(); renderCommitted(); clearLive(); }, 120);
   }
 
   function boot() {
@@ -309,6 +556,7 @@
     readInk();
     measure();
     wire();
+    syncArm();
     setVisible(false);
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
@@ -317,53 +565,21 @@
   if (document.readyState === 'complete') boot();
   else window.addEventListener('load', boot);
 
-  /* ------------------------------------------------------------
-     Dev helpers — run from the console
-     ------------------------------------------------------------ */
+  /* ============================================================
+     Console helpers
+     ============================================================ */
   Edition.marksStatus = function () {
     return {
-      term: TERM,
-      connected: !!db(),
-      visible: visible,
-      dimmed: dimmed,
-      loaded: MARKS.length,
-      square: Math.round(side),
-      offset: [Math.round(offX), Math.round(offY)],
-      dpr: dpr
+      term: TERM, connected: !!db(), visible: visible, dimmed: dimmed,
+      tool: tool, sticker: sticker, weight: weight,
+      armed: armed(), loaded: MARKS.length, undoDepth: UNDO.length,
+      square: Math.round(side), dpr: dpr
     };
   };
-
-  /* seeds a few marks so rendering can be checked before drawing exists */
-  Edition.seedMarks = function (n) {
-    var c = db();
-    if (!c) return Promise.reject('no client');
-    n = n || 6;
-    var rows = [];
-    for (var i = 0; i < n; i++) {
-      var pts = [], x = Math.random(), y = Math.random(), a = Math.random() * 6.3;
-      for (var k = 0; k < 40; k++) {
-        a += (Math.random() - 0.5) * 0.6;
-        x += Math.cos(a) * 0.012; y += Math.sin(a) * 0.012;
-        pts.push([+x.toFixed(4), +y.toFixed(4)]);
-      }
-      rows.push({
-        id: 'seed' + Date.now() + '-' + i,
-        term: TERM, who: 'seed', type: 'stroke',
-        data: { w: 0.0022, pts: pts }
-      });
-    }
-    var kinds = Object.keys(STICKERS);
-    for (var j = 0; j < 4; j++) {
-      rows.push({
-        id: 'seedst' + Date.now() + '-' + j,
-        term: TERM, who: 'seed', type: 'sticker',
-        data: { k: kinds[j % kinds.length], u: 0.2 + j * 0.2, v: 0.35,
-                s: 0.06, w: 0.0022 }
-      });
-    }
-    return c.from('marks').insert(rows).then(function (res) {
-      if (res.error) { console.warn('[marks] seed failed:', res.error.message); return res; }
-      return load().then(function () { return 'seeded ' + rows.length; });
+  Edition.marksSizes = function () {
+    return CFG.weights.map(function (w, i) {
+      return { step: i + 1, fraction: w,
+               pxOn1440: +(w * 1440).toFixed(1), pxHere: +(w * side).toFixed(1) };
     });
   };
 })();
