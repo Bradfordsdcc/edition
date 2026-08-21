@@ -49,13 +49,13 @@
 
     /* stroke weights as a fraction of the square. On a 1440 square
        these are roughly 1.9 / 2.9 / 4.3 / 6.3 / 9.2 px. */
-    weights: [0.0013, 0.0020, 0.0030, 0.0044, 0.0064],
+    weights: [0.00065, 0.0010, 0.0015, 0.0022, 0.0032],
     defaultWeight: 2,
 
     /* stickers are a fixed size — deliberately not tied to the weight
        slider, so the slider only ever means "pen" */
-    stickerSize: 0.045,
-    stickerWeight: 0.0022,
+    stickerSize: 0.0225,
+    stickerWeight: 0.0013,
 
     /* the eraser reaches further with a heavier pen selected */
     eraseBase: 0.018,
@@ -111,8 +111,7 @@
     wrap = document.createElement('div');
     wrap.className = 'edi-marks-layer';
     wrap.style.cssText =
-      'position:fixed;inset:0;z-index:0;pointer-events:none;' +
-      'opacity:0;transition:opacity .35s ease';
+      'position:fixed;inset:0;z-index:0;pointer-events:none;display:none';
     cCommit = document.createElement('canvas');
     cLive = document.createElement('canvas');
     [cCommit, cLive].forEach(function (c) {
@@ -292,8 +291,14 @@
     });
   }
 
+  /* A silent no-op is the failure mode to guard against here: if row
+     level security rejects the update, supabase-js still resolves
+     without an error and simply changes nothing — so the next poll
+     brings the mark straight back. Asking for the affected rows makes
+     that visible instead of mysterious. */
   function softDelete(ids) {
     if (!ids.length) return;
+    var gone = MARKS.filter(function (m) { return ids.indexOf(m.id) !== -1; });
     MARKS = MARKS.filter(function (m) { return ids.indexOf(m.id) === -1; });
     renderCommitted();
     var c = db();
@@ -301,8 +306,18 @@
     c.from('marks')
       .update({ deleted_at: new Date().toISOString(), deleted_by: WHO })
       .in('id', ids)
+      .select('id')
       .then(function (res) {
-        if (res.error) console.warn('[marks] erase failed:', res.error.message);
+        if (res.error) {
+          console.warn('[marks] erase rejected:', res.error.message);
+        } else if (!res.data || res.data.length < ids.length) {
+          console.warn('[marks] erase changed ' + ((res.data || []).length) +
+            ' of ' + ids.length + ' rows — the update policy is blocking it. ' +
+            'Run Edition.testErase() for the reason.');
+          /* put them back rather than pretend they are gone */
+          MARKS = MARKS.concat(gone);
+          renderCommitted();
+        }
       });
   }
 
@@ -312,8 +327,13 @@
     c.from('marks')
       .update({ deleted_at: null, deleted_by: null })
       .in('id', ids)
+      .select('id')
       .then(function (res) {
-        if (res.error) { console.warn('[marks] restore failed:', res.error.message); return; }
+        if (res.error) { console.warn('[marks] restore rejected:', res.error.message); return; }
+        if (!res.data || !res.data.length) {
+          console.warn('[marks] restore changed no rows — past the 30s window, ' +
+                       'or the "undo recent erase" policy is missing.');
+        }
         load();
       });
   }
@@ -531,9 +551,7 @@
       };
       commit(m);
       pushUndo({ kind: 'draw', id: m.id });
-      sticker = null;               /* stickers release after placing */
-      syncArm();
-      return;
+      return;                       /* the sticker stays armed */
     }
     if (tool === 'erase') { drawing = true; eraseAt(p[0], p[1]); return; }
     if (tool === 'pen') {
@@ -581,7 +599,7 @@
   function setVisible(on) {
     visible = !!on;
     document.documentElement.classList.toggle('marks-on', visible);
-    wrap.style.opacity = visible ? '1' : '0';
+    wrap.style.display = visible ? 'block' : 'none';
     var box = qs('[data-edition="marks-box"]');
     if (box) box.style.display = visible ? '' : 'none';
     qsa('[data-edition="marks-toggle"]').forEach(function (el) {
@@ -604,7 +622,7 @@
   function setDim(on) {
     dimmed = !!on;
     document.documentElement.classList.toggle('cards-hidden', dimmed);
-    document.documentElement.classList.toggle('cards-dim', dimmed);  /* legacy */
+    document.documentElement.classList.remove('cards-dim');   /* superseded */
     qsa('[data-edition="dim-toggle"],[data-edition="hide-cards"]').forEach(function (b) {
       b.classList.toggle('is-active', dimmed);
       rememberLabel(b);
@@ -736,6 +754,35 @@
     if (missing.length) console.warn('missing hooks:', missing.join(', '));
     else console.log('all hooks found');
     return rows;
+  };
+
+  /* Writes a throwaway mark, erases it, and reports exactly what the
+     database did at each step. */
+  Edition.testErase = function () {
+    var c = db();
+    if (!c) return Promise.reject('no supabase client');
+    var id = 'test' + rid();
+    return c.from('marks').insert({
+      id: id, term: TERM, who: WHO, type: 'stroke',
+      data: { w: 0.001, pts: [[0.01, 0.01], [0.02, 0.02]] }
+    }).select('id').then(function (ins) {
+      if (ins.error) { console.error('INSERT failed:', ins.error.message); throw ins.error; }
+      console.log('INSERT ok');
+      return c.from('marks')
+        .update({ deleted_at: new Date().toISOString(), deleted_by: WHO })
+        .eq('id', id).select('id');
+    }).then(function (upd) {
+      if (upd.error) { console.error('UPDATE failed:', upd.error.message); return; }
+      var n = (upd.data || []).length;
+      if (n) {
+        console.log('UPDATE ok — erase works. ' + n + ' row changed.');
+      } else {
+        console.error('UPDATE changed 0 rows. The "erase marks" policy is missing ' +
+          'or the anon role has no UPDATE grant. In the SQL editor run:\n' +
+          '  grant update on public.marks to anon, authenticated;\n' +
+          '  -- and confirm the "erase marks" policy exists');
+      }
+    });
   };
 
   Edition.marksSizes = function () {
