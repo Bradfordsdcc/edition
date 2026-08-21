@@ -54,7 +54,7 @@
 
     /* stickers are a fixed size — deliberately not tied to the weight
        slider, so the slider only ever means "pen" */
-    stickerSize: 0.0225,
+    stickerSize: 0.018,
     stickerWeight: 0.0013,
 
     /* the eraser reaches further with a heavier pen selected */
@@ -291,11 +291,9 @@
     });
   }
 
-  /* A silent no-op is the failure mode to guard against here: if row
-     level security rejects the update, supabase-js still resolves
-     without an error and simply changes nothing — so the next poll
-     brings the mark straight back. Asking for the affected rows makes
-     that visible instead of mysterious. */
+  /* No .select() here on purpose: once a row is erased the read policy
+     hides it, so asking for it back always looks like a failure even
+     when the write succeeded. A rejected write raises a real error. */
   function softDelete(ids) {
     if (!ids.length) return;
     var gone = MARKS.filter(function (m) { return ids.indexOf(m.id) !== -1; });
@@ -306,16 +304,11 @@
     c.from('marks')
       .update({ deleted_at: new Date().toISOString(), deleted_by: WHO })
       .in('id', ids)
-      .select('id')
       .then(function (res) {
         if (res.error) {
-          console.warn('[marks] erase rejected:', res.error.message);
-        } else if (!res.data || res.data.length < ids.length) {
-          console.warn('[marks] erase changed ' + ((res.data || []).length) +
-            ' of ' + ids.length + ' rows — the update policy is blocking it. ' +
-            'Run Edition.testErase() for the reason.');
-          /* put them back rather than pretend they are gone */
-          MARKS = MARKS.concat(gone);
+          console.warn('[marks] erase rejected:', res.error.message,
+                       '\nRun Edition.testErase() for the full picture.');
+          MARKS = MARKS.concat(gone);      /* do not pretend it is gone */
           renderCommitted();
         }
       });
@@ -327,13 +320,8 @@
     c.from('marks')
       .update({ deleted_at: null, deleted_by: null })
       .in('id', ids)
-      .select('id')
       .then(function (res) {
         if (res.error) { console.warn('[marks] restore rejected:', res.error.message); return; }
-        if (!res.data || !res.data.length) {
-          console.warn('[marks] restore changed no rows — past the 30s window, ' +
-                       'or the "undo recent erase" policy is missing.');
-        }
         load();
       });
   }
@@ -366,7 +354,7 @@
   var tool = null;            /* 'pen' | 'erase' | null */
   var sticker = null;         /* 'star' | 'heart' | 'reg' | null */
   var weight = CFG.defaultWeight;
-  var drawing = false, live = null;
+  var drawing = false, live = null, eraseBatch = null;
 
   function armed() { return tool !== null || sticker !== null; }
 
@@ -529,7 +517,12 @@
         if (Math.hypot(d.u - u, d.v - v) < r + (d.s || CFG.stickerSize) * 0.5) hit.push(m.id);
       }
     }
-    if (hit.length) { softDelete(hit); pushUndo({ kind: 'erase', ids: hit }); }
+    if (!hit.length) return;
+    softDelete(hit);
+    /* A drag fires pointermove many times. Collect the whole sweep so
+       one drag is one undo, rather than a dozen. */
+    if (eraseBatch) eraseBatch = eraseBatch.concat(hit);
+    else pushUndo({ kind: 'erase', ids: hit });
   }
 
   /* ---------- pointer ---------- */
@@ -553,7 +546,7 @@
       pushUndo({ kind: 'draw', id: m.id });
       return;                       /* the sticker stays armed */
     }
-    if (tool === 'erase') { drawing = true; eraseAt(p[0], p[1]); return; }
+    if (tool === 'erase') { drawing = true; eraseBatch = []; eraseAt(p[0], p[1]); return; }
     if (tool === 'pen') {
       drawing = true;
       live = { w: CFG.weights[weight - 1], pts: [p] };
@@ -578,7 +571,13 @@
   function onUp() {
     if (!drawing) return;
     drawing = false;
-    if (tool === 'erase' || !live) { live = null; return; }
+    if (tool === 'erase') {
+      if (eraseBatch && eraseBatch.length) pushUndo({ kind: 'erase', ids: eraseBatch });
+      eraseBatch = null;
+      live = null;
+      return;
+    }
+    if (!live) { live = null; return; }
     var pts = simplify(live.pts, CFG.simplifyTol).map(function (p) {
       return [+p[0].toFixed(4), +p[1].toFixed(4)];
     });
@@ -765,23 +764,28 @@
     return c.from('marks').insert({
       id: id, term: TERM, who: WHO, type: 'stroke',
       data: { w: 0.001, pts: [[0.01, 0.01], [0.02, 0.02]] }
-    }).select('id').then(function (ins) {
+    }).then(function (ins) {
       if (ins.error) { console.error('INSERT failed:', ins.error.message); throw ins.error; }
-      console.log('INSERT ok');
+      console.log('1. INSERT ok');
       return c.from('marks')
         .update({ deleted_at: new Date().toISOString(), deleted_by: WHO })
-        .eq('id', id).select('id');
+        .eq('id', id);
     }).then(function (upd) {
-      if (upd.error) { console.error('UPDATE failed:', upd.error.message); return; }
-      var n = (upd.data || []).length;
-      if (n) {
-        console.log('UPDATE ok — erase works. ' + n + ' row changed.');
-      } else {
-        console.error('UPDATE changed 0 rows. The "erase marks" policy is missing ' +
-          'or the anon role has no UPDATE grant. In the SQL editor run:\n' +
-          '  grant update on public.marks to anon, authenticated;\n' +
-          '  -- and confirm the "erase marks" policy exists');
+      if (upd.error) {
+        console.error('2. UPDATE rejected:', upd.error.message);
+        console.error('   Run supabase-fix-erase.sql in the SQL editor.');
+        return;
       }
+      console.log('2. UPDATE ok');
+      /* the row should now be invisible to the read policy */
+      return c.from('marks').select('id').eq('id', id).then(function (sel) {
+        if (sel.error) { console.error('3. SELECT failed:', sel.error.message); return; }
+        if (sel.data && sel.data.length) {
+          console.error('3. the mark is STILL readable — the erase did not stick');
+        } else {
+          console.log('3. mark is gone. Erasing works.');
+        }
+      });
     });
   };
 
