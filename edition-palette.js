@@ -22,9 +22,9 @@
   var FAVICON = {
     on: true,
     size: 128,        /* drawn large, shown small — stays sharp on retina */
-    pad: 0.12,        /* margin around the mark, as a fraction */
+    pad: 0.03,        /* margin around the mark, as a fraction */
     centre: true,     /* centre the half disc's own box, not the circle's */
-    bg: true,         /* false leaves it transparent, outline only */
+    bg: false,        /* transparent, matching the main site's favicon */
     stroke: 1.25      /* paper-coloured outline, in px at 16px display */
   };
 
