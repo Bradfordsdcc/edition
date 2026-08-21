@@ -90,78 +90,116 @@
      family, lightness picks which of its three names, and anything
      with almost no saturation falls through to a neutral.
      ------------------------------------------------------------ */
-  /* 18 hue families x 6 variants (deep / mid / light, each muted or
-     vivid), plus separate warm and cool neutral ladders. Names are
-     derived rather than listed because the palettes are generated. */
+  /* ------------------------------------------------------------
+     Naming a generated colour.
+
+     Hue is measured in OKLCH rather than HSL. HSL hue is
+     perceptually lopsided — the span from yellow to green covers
+     60 degrees there but only 32 perceptually — so evenly spaced
+     HSL families put yellow names on colours that are plainly
+     yellow-green. OKLCH is perceptually even, so a family boundary
+     lands where the eye puts it.
+
+     The families themselves are deliberately uneven in width,
+     sized to how finely people actually name each region: reds and
+     pinks get narrow bands, blues get wide ones.
+
+     Each family carries ten names — five lightness bands, each in a
+     muted and a vivid version.
+     ------------------------------------------------------------ */
   var FAMILIES = [
-    /*   0 */ ['Oxblood','Crimson','Brick','Vermilion','Blush','Coral'],
-    /*  20 */ ['Mahogany','Scarlet','Terracotta','Persimmon','Salmon','Melon'],
-    /*  40 */ ['Umber','Burnt Orange','Clay','Tangerine','Apricot','Cantaloupe'],
-    /*  60 */ ['Bistre','Amber','Ochre','Marigold','Wheat','Honey'],
-    /*  80 */ ['Olive','Mustard','Khaki','Saffron','Custard','Lemon'],
-    /* 100 */ ['Moss','Chartreuse','Sage','Acid Green','Celadon','Lime Wash'],
-    /* 120 */ ['Pine','Kelly Green','Fern','Grass','Eucalyptus','Spring Green'],
-    /* 140 */ ['Bottle','Emerald','Sea Green','Jade','Pistachio','Mint'],
-    /* 160 */ ['Deep Teal','Viridian','Verdigris','Malachite','Seafoam','Aquamarine'],
-    /* 180 */ ['Spruce','Teal','Slate Teal','Turquoise','Powder','Aqua'],
-    /* 200 */ ['Petrol','Cerulean','Steel Blue','Peacock','Glacier','Sky'],
-    /* 220 */ ['Prussian','Cobalt','Denim','Azure','Cornflower','Bluebell'],
-    /* 240 */ ['Navy','Ultramarine','Slate Blue','Sapphire','Periwinkle','Powder Blue'],
-    /* 260 */ ['Midnight','Indigo','Dusk','Iris','Wisteria','Lavender'],
-    /* 280 */ ['Aubergine','Violet','Heather','Amethyst','Lilac','Mauve'],
-    /* 300 */ ['Plum','Magenta','Mulberry','Fuchsia','Orchid','Thistle'],
-    /* 320 */ ['Wine','Cerise','Raspberry','Hot Pink','Peony','Bubblegum'],
-    /* 340 */ ['Maroon','Ruby','Rosewood','Rose','Shell','Petal']
+    [355, 12,'Rose',   ['Oxblood','Carmine','Rosewood','Cerise','Rose','Watermelon','Blush','Flamingo','Rose Water','Candy Floss']],
+    [ 12, 25,'Red',   ['Garnet','Ruby','Barn Red','Cherry','Clay Rose','Poppy','Rose Quartz','Coral Pink','Powder Rose','Peach Blossom']],
+    [ 25, 38,'Scarlet',   ['Maroon','Scarlet','Brick','Vermilion','Salmon','Tomato','Shell','Peach','Seashell','Apricot Cream']],
+    [ 38, 50,'Ember',   ['Mahogany','Cinnabar','Rust','Persimmon','Melon','Papaya','Apricot','Sherbet','Peach Milk','Creamsicle']],
+    [ 50, 66,'Orange',   ['Umber','Burnt Orange','Clay','Tangerine','Sandstone','Marmalade','Buff','Cantaloupe','Bisque','Melon Cream']],
+    [ 66, 80,'Amber',   ['Bistre','Amber','Ochre','Marigold','Fawn','Honey','Oat','Buttercup','Almond','Lemon Cream']],
+    [ 80, 95,'Gold',   ['Bronze','Old Gold','Mustard','Amber Gold','Wheat','Saffron','Vanilla','Sunflower','Cream','Daffodil']],
+    [ 95,118,'Yellow',   ['Olive Drab','Citrine','Khaki','Mustard Yellow','Straw','Chrome Yellow','Parchment','Lemon','Ivory','Citron']],
+    [118,130,'Lime',   ['Moss','Chartreuse','Sage','Acid Green','Celadon','Lime','Lime Wash','Neon Lime','Pale Lime','Key Lime']],
+    [130,145,'Green',   ['Loden','Kelly Green','Fern','Grass','Willow','Spring Green','Pistachio','Electric Green','Green Tea','Mint Ice']],
+    [145,160,'Emerald',   ['Pine','Emerald','Ivy','Shamrock','Eucalyptus','Jade','Honeydew','Mint','Dew','Peppermint']],
+    [160,185,'Sea',   ['Bottle','Malachite','Verdigris','Sea Green','Sea Glass','Aquamarine','Seafoam','Ice Green','Sea Mist','Glacier Green']],
+    [185,205,'Teal',   ['Deep Teal','Viridian','Slate Teal','Turquoise','Celadon Blue','Aqua','Powder','Ice Blue','Vapour','Pool']],
+    [205,230,'Cyan',   ['Spruce','Petrol','Slate Cyan','Peacock','Mist Blue','Cerulean','Glacier','Powder Blue','Cloud Blue','Robin Egg']],
+    [230,250,'Sky',   ['Prussian','Azure','Steel Blue','Cornflower','Chambray','Sky Blue','Bluebell','Frost','Sky Wash','Cirrus']],
+    [250,268,'Blue',   ['Navy','Sapphire','Denim','Cobalt','Wedgwood','Iris','Periwinkle','Alice Blue','Moonstone','Forget Me Not']],
+    [268,285,'Indigo',   ['Midnight','Ultramarine','Slate Blue','Klein Blue','Dusk','Hyacinth','Wisteria','Lilac Blue','Lavender Grey','Iris Mist']],
+    [285,305,'Violet',   ['Aubergine','Violet','Heather','Amethyst','Lavender','Orchid','Lilac','Powder Violet','Orchid Mist','Violet Ice']],
+    [305,320,'Purple',   ['Plum','Byzantium','Mulberry','Grape','Thistle','Magenta Rose','Mauve','Powder Lilac','Dusty Lilac','Lilac Wash']],
+    [320,338,'Magenta',   ['Wine','Tyrian','Raspberry','Fuchsia','Peony','Magenta','Cotton Candy','Bubblegum','Pink Pearl','Fairy Floss']],
+    [338,355,'Pink',   ['Merlot','Ruby Pink','Cranberry','Rose Red','Dusty Pink','Punch','Petal','Ballet Pink','Shell Pink','Blossom']]
   ];
-  var WARM_N = [[0.16,'Ink'],[0.30,'Espresso'],[0.46,'Bark'],[0.62,'Taupe'],
-                [0.78,'Putty'],[0.90,'Oat'],[1.01,'Bone']];
-  var COOL_N = [[0.16,'Ink'],[0.30,'Charcoal'],[0.46,'Graphite'],[0.62,'Slate'],
-                [0.78,'Fog'],[0.90,'Mist'],[1.01,'Chalk']];
+  var WARM_N = [[0.20,'Ink'],[0.32,'Espresso'],[0.44,'Bark'],[0.56,'Umber Grey'],
+                [0.68,'Taupe'],[0.80,'Putty'],[0.90,'Oat'],[1.01,'Bone']];
+  var COOL_N = [[0.20,'Ink'],[0.32,'Charcoal'],[0.44,'Graphite'],[0.56,'Slate'],
+                [0.68,'Steel'],[0.80,'Fog'],[0.90,'Mist'],[1.01,'Chalk']];
 
   function hexToRgb(h) {
     h = h.replace('#', '');
     return [0, 2, 4].map(function (i) { return parseInt(h.substr(i, 2), 16); });
   }
-  function rgbToHsl(r, g, b) {
-    r /= 255; g /= 255; b /= 255;
-    var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-    var l = (mx + mn) / 2, h = 0, s = 0;
-    if (mx !== mn) {
-      var d = mx - mn;
-      s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
-      if (mx === r) h = (g - b) / d + (g < b ? 6 : 0);
-      else if (mx === g) h = (b - r) / d + 2;
-      else h = (r - g) / d + 4;
-      h *= 60;
+  function toLinear(c) {
+    c /= 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  }
+  function toOklch(rgb) {
+    var r = toLinear(rgb[0]), g = toLinear(rgb[1]), b = toLinear(rgb[2]);
+    var l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
+    var m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
+    var s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+    var l_ = Math.cbrt(l), m_ = Math.cbrt(m), s_ = Math.cbrt(s);
+    var L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_;
+    var A = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
+    var B = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
+    var H = Math.atan2(B, A) * 180 / Math.PI;
+    if (H < 0) H += 360;
+    return [L, Math.hypot(A, B), H];
+  }
+  function oklchInGamut(L, C, H) {
+    var h = H * Math.PI / 180, a = C * Math.cos(h), b = C * Math.sin(h);
+    var l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+    var m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+    var s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+    var l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+    var lr =  4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+    var lg = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+    var lb = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+    return lr >= -0.001 && lr <= 1.001 && lg >= -0.001 && lg <= 1.001 &&
+           lb >= -0.001 && lb <= 1.001;
+  }
+  /* how much chroma is actually reachable at this lightness and hue —
+     "vivid" only means anything relative to what is possible */
+  function maxChroma(L, H) {
+    var lo = 0, hi = 0.45;
+    for (var i = 0; i < 22; i++) {
+      var mid = (lo + hi) / 2;
+      if (oklchInGamut(L, mid, H)) lo = mid; else hi = mid;
     }
-    return [h, s, l];
+    return lo;
   }
 
   Edition.nameColor = function (hex) {
-    var rgb = hexToRgb(hex);
-    var mx = Math.max(rgb[0], rgb[1], rgb[2]);
-    var mn = Math.min(rgb[0], rgb[1], rgb[2]);
-    var chroma = mx - mn;
-    var hsl = rgbToHsl(rgb[0], rgb[1], rgb[2]);
-    var h = hsl[0], l = hsl[2];
+    var lch = toOklch(hexToRgb(hex));
+    var L = lch[0], C = lch[1], H = lch[2];
 
-    /* Judge colourfulness by raw chroma, not HSL saturation, which
-       balloons near white and would name a cream "Apricot". The bar
-       scales with lightness because a dark colour can never reach as
-       much absolute chroma as a pale one. */
-    if (chroma < 10 + 28 * l) {
-      var set = (h < 70 || h >= 300) ? WARM_N : COOL_N;
-      for (var i = 0; i < set.length; i++) if (l < set[i][0]) return set[i][1];
+    /* too little chroma to carry a hue at all */
+    if (C < 0.024 + 0.014 * L) {
+      var warm = (H >= 20 && H < 130) || H >= 330;
+      var set = warm ? WARM_N : COOL_N;
+      for (var i = 0; i < set.length; i++) if (L < set[i][0]) return set[i][1];
       return set[set.length - 1][1];
     }
 
-    /* chroma as a fraction of the most a colour can reach at this
-       lightness — separates a muted oxblood from a vivid crimson */
-    var maxC = 255 * (1 - Math.abs(2 * l - 1));
-    var rel = maxC > 1 ? chroma / maxC : 0;
-    var vivid = rel > 0.78 ? 1 : 0;
-    var band = l < 0.32 ? 0 : (l < 0.62 ? 1 : 2);
-    return FAMILIES[Math.round(h / 20) % 18][band * 2 + vivid];
+    var fam = FAMILIES[0];
+    for (var k = 0; k < FAMILIES.length; k++) {
+      var f = FAMILIES[k];
+      if (f[0] < f[1]) { if (H >= f[0] && H < f[1]) { fam = f; break; } }
+      else { if (H >= f[0] || H < f[1]) { fam = f; break; } }   /* the wrap */
+    }
+    var band = L < 0.40 ? 0 : (L < 0.62 ? 1 : (L < 0.76 ? 2 : (L < 0.88 ? 3 : 4)));
+    var vivid = (C / Math.max(1e-4, maxChroma(L, H))) > 0.82 ? 1 : 0;
+    return fam[3][band * 2 + vivid];
   };
 
   /* ------------------------------------------------------------
