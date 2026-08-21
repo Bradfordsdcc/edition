@@ -65,8 +65,13 @@
        A raw drag emits hundreds of near-identical points; unsimplified
        strokes would blow past the 20KB row limit and make the wall slow
        to load. */
-    minPointGap: 0.0035,
-    simplifyTol: 0.0016,
+    minPointGap: 0.0018,
+    simplifyTol: 0.0006,
+
+    /* Draw through the points with curves rather than straight
+       segments. Without this a stroke is a polyline, and every kept
+       point becomes a visible corner. */
+    smooth: true,
 
     undoWindowMs: 28000,     /* must stay under the 30s SQL policy */
 
@@ -198,9 +203,25 @@
       if (pts.length < 2) return;
       ctx.lineWidth = Math.max(0.7, (d.w || 0.002) * side);
       ctx.beginPath();
-      for (var i = 0; i < pts.length; i++) {
-        var x = X(pts[i][0]), y = Y(pts[i][1]);
-        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      if (!CFG.smooth || pts.length < 3) {
+        for (var i = 0; i < pts.length; i++) {
+          var x = X(pts[i][0]), y = Y(pts[i][1]);
+          i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        }
+      } else {
+        /* Each stored point becomes a curve control point and the pen
+           passes through the midpoints between them, so the corners
+           round off instead of showing as facets. */
+        ctx.moveTo(X(pts[0][0]), Y(pts[0][1]));
+        for (var j = 1; j < pts.length - 1; j++) {
+          var cx = X(pts[j][0]), cy = Y(pts[j][1]);
+          var mx = (cx + X(pts[j + 1][0])) / 2;
+          var my = (cy + Y(pts[j + 1][1])) / 2;
+          ctx.quadraticCurveTo(cx, cy, mx, my);
+        }
+        var n = pts.length - 1;
+        ctx.quadraticCurveTo(X(pts[n - 1][0]), Y(pts[n - 1][1]),
+                             X(pts[n][0]), Y(pts[n][1]));
       }
       ctx.stroke();
       return;
@@ -598,8 +619,13 @@
     visible = !!on;
     document.documentElement.classList.toggle('marks-on', visible);
     wrap.style.display = visible ? 'block' : 'none';
-    var box = qs('[data-edition="marks-box"]');
-    if (box) box.style.display = visible ? '' : 'none';
+    /* The toolbar is hidden in CSS, not with an inline style. Setting
+       style.display = '' only removes the inline value, which lets the
+       stylesheet's `display:none` win again — so the toolbar could
+       never reopen. A class leaves the display value yours to pick. */
+    qsa('[data-edition="marks-box"]').forEach(function (box) {
+      box.classList.toggle('is-open', visible);
+    });
     qsa('[data-edition="marks-toggle"]').forEach(function (el) {
       rememberLabel(el);
       var on = el.getAttribute('data-label-on') || CFG.labels.marksOn;
