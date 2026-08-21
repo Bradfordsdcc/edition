@@ -15,6 +15,30 @@
 (function () {
   'use strict';
 
+  /* Draw the half-circle mark into a canvas and hand it to the browser
+     as the favicon, repainted on every palette change. Canvas rather
+     than an inline SVG because Safari's support for SVG favicons is
+     unreliable, and a PNG data URI works everywhere. */
+  var FAVICON = {
+    on: true,
+    size: 128,        /* drawn large, shown small — stays sharp on retina */
+    pad: 0.12,        /* margin around the mark, as a fraction */
+    centre: true,     /* centre the half disc's own box, not the circle's */
+    bg: true,         /* false leaves it transparent, outline only */
+    stroke: 1.25      /* paper-coloured outline, in px at 16px display */
+  };
+
+  /* The tab title can carry the palette. Kept separate from og:title
+     and the meta description, which stay static — those are what search
+     results and shared links use, and colour names there would read as
+     broken rather than playful. */
+  var TITLE = {
+    on: true,
+    template: ' — {ink} · {paper}',
+    onlyOnChange: false,   /* true = only after Randomize or Swap, not on load */
+    base: null             /* captured from the page on first run */
+  };
+
   var MIN_RATIO = 7;      /* AAA for body text */
   var MAX_RATIO = 14;     /* past this the dark member loses its hue */
   var STORE_KEY = 'edition:palette';
@@ -265,7 +289,64 @@
   };
   Edition.colorTargets = TARGETS;
 
-  function apply(p) {
+  function paintFavicon(p) {
+    if (!FAVICON.on) return;
+    try {
+      var n = FAVICON.size;
+      var c = document.createElement('canvas');
+      c.width = c.height = n;
+      var x = c.getContext('2d');
+      if (!x) return;
+      if (FAVICON.bg) { x.fillStyle = p.paper; x.fillRect(0, 0, n, n); }
+      var lw = FAVICON.stroke ? (n / 16) * FAVICON.stroke : 0;
+      var pad = FAVICON.pad * n;
+      /* the stroke straddles the path, so half of it sits outside */
+      var r = (n - pad * 2 - lw) / 2;
+      var cy = n / 2;
+      /* a half disc is r wide but 2r tall, so centring the circle would
+         leave the right half of the square empty */
+      var cx = n / 2 + (FAVICON.centre ? r / 2 : 0);
+      x.beginPath();
+      x.arc(cx, cy, r, Math.PI / 2, Math.PI * 1.5, false);
+      x.closePath();
+      x.fillStyle = p.ink;
+      x.fill();
+      /* Without a solid ground the mark has to survive both a light and
+         a dark browser tab. Half the palettes make the ink the lighter
+         colour, so an outline in the opposite colour means whichever
+         one disappears against the tab, the other still reads. */
+      if (lw > 0) {
+        x.lineWidth = lw;
+        x.lineJoin = 'round';
+        x.strokeStyle = p.paper;
+        x.stroke();
+      }
+
+      var href = c.toDataURL('image/png');
+      var old = document.querySelectorAll('link[rel~="icon"],link[rel="shortcut icon"]');
+      Array.prototype.forEach.call(old, function (el) { el.parentNode.removeChild(el); });
+      var link = document.createElement('link');
+      link.rel = 'icon';
+      link.type = 'image/png';
+      link.href = href;
+      document.head.appendChild(link);
+      Edition.faviconHref = href;
+    } catch (e) { /* not worth breaking the page over */ }
+  }
+  Edition.paintFavicon = paintFavicon;
+  Edition.faviconOptions = FAVICON;
+
+  function paintTitle(p, userAction) {
+    if (!TITLE.on) return;
+    if (TITLE.base === null) TITLE.base = document.title;
+    if (TITLE.onlyOnChange && !userAction) { document.title = TITLE.base; return; }
+    document.title = TITLE.base +
+      TITLE.template.replace('{ink}', Edition.nameColor(p.ink))
+                    .replace('{paper}', Edition.nameColor(p.paper));
+  }
+  Edition.titleOptions = TITLE;
+
+  function apply(p, userAction) {
     var r = document.documentElement;
     TARGETS.ink.forEach(function (n) { r.style.setProperty(n, p.ink); });
     TARGETS.paper.forEach(function (n) { r.style.setProperty(n, p.paper); });
@@ -274,6 +355,8 @@
     Edition.paperName = Edition.nameColor(p.paper);
     window.dispatchEvent(new CustomEvent('edition:palette', { detail: p }));
     paintNames();
+    paintFavicon(p);
+    paintTitle(p, userAction);
   }
   function load() {
     try {
@@ -292,13 +375,13 @@
     var p = Edition.palette;
     if (!p) return null;
     var q = { ink: p.paper, paper: p.ink, r: p.r, flip: !p.flip };
-    save(q); apply(q);
+    save(q); apply(q, true);
     return q;
   };
 
   Edition.shuffle = function () {
     var p = Edition.makePalette();
-    save(p); apply(p);
+    save(p); apply(p, true);
     return p;
   };
 
