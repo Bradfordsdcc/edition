@@ -123,6 +123,25 @@
       }
     });
 
+    /* Upcoming events are sorted here as well as in the CMS. Webflow's
+       collection sort is the primary source of order, but relying on it
+       alone means the page silently drifts if that setting is ever
+       changed — and sorting an already-sorted list costs nothing. */
+    var live_cards = Array.prototype.slice.call(
+      live.querySelectorAll('.edition-event-card'));
+    if (live_cards.length > 1) {
+      var host = live_cards[0].parentNode;
+      live_cards.sort(function (a, b) {
+        var sa = parseStamp(a.getAttribute('data-start'), CFG.tz);
+        var sb = parseStamp(b.getAttribute('data-start'), CFG.tz);
+        if (sa === null && sb === null) return 0;
+        if (sa === null) return 1;
+        if (sb === null) return -1;
+        return sa - sb;
+      });
+      live_cards.forEach(function (c) { host.appendChild(c); });
+    }
+
     /* anything already in the past wrap gets sorted and marked */
     var pastCards = Array.prototype.slice.call(
       pastWrap.querySelectorAll('.edition-event-card'));
