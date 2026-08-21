@@ -29,6 +29,17 @@
   }
   function qs(sel) { return document.querySelector(sel); }
 
+  /* Your text buttons wrap their label in a .buttontext child, with the
+     brackets as siblings, so write into that when it exists. */
+  function labelEl(el) { return el.querySelector('.buttontext') || el; }
+  function setLabel(el, text) {
+    if (!el || !text) return;
+    labelEl(el).textContent = text;
+  }
+  function rememberLabel(el) {
+    if (el && !el.__label0) el.__label0 = labelEl(el).textContent;
+  }
+
   var CFG = {
     url: 'https://jtelqybifbiazhmltear.supabase.co',
     key: 'sb_publishable_YS4zJgl-oPOL2GRKvhNqoQ_uD85_ZEO',
@@ -57,7 +68,19 @@
     minPointGap: 0.0035,
     simplifyTol: 0.0016,
 
-    undoWindowMs: 28000      /* must stay under the 30s SQL policy */
+    undoWindowMs: 28000,     /* must stay under the 30s SQL policy */
+
+    /* While a tool is armed these stop swallowing the pointer, so the
+       canvas underneath can actually be drawn on. The nav is left alone
+       — the toolbar lives in it and has to stay clickable. */
+    passThrough: '.edition-card-body, .edition-footer',
+
+    labels: {
+      marksOn:  'HIDE ANNOTATIONS',
+      marksOff: null,               /* null = keep whatever is in the markup */
+      cardsOn:  'SHOW CARDS',
+      cardsOff: null
+    }
   };
   Edition.marksConfig = CFG;
 
@@ -330,6 +353,11 @@
   function syncArm() {
     var on = armed();
     wrap.style.pointerEvents = on ? 'auto' : 'none';
+    /* the content sections sit above the canvas, so they have to stop
+       catching the pointer while a tool is armed */
+    qsa(CFG.passThrough).forEach(function (el) {
+      el.style.pointerEvents = on ? 'none' : '';
+    });
     /* stop the browser scrolling the page from a drag on the canvas */
     wrap.style.touchAction = on ? 'none' : '';
     document.documentElement.classList.toggle('marks-armed', on);
@@ -554,8 +582,15 @@
     visible = !!on;
     document.documentElement.classList.toggle('marks-on', visible);
     wrap.style.opacity = visible ? '1' : '0';
-    var box = document.querySelector('[data-edition="marks-box"]');
+    var box = qs('[data-edition="marks-box"]');
     if (box) box.style.display = visible ? '' : 'none';
+    qsa('[data-edition="marks-toggle"]').forEach(function (el) {
+      rememberLabel(el);
+      var on = el.getAttribute('data-label-on') || CFG.labels.marksOn;
+      var off = el.getAttribute('data-label-off') || CFG.labels.marksOff || el.__label0;
+      setLabel(el, visible ? on : off);
+      el.classList.toggle('is-active', visible);
+    });
     if (!visible) {
       setDim(false);
       tool = null; sticker = null; syncArm();
@@ -572,6 +607,10 @@
     document.documentElement.classList.toggle('cards-dim', dimmed);  /* legacy */
     qsa('[data-edition="dim-toggle"],[data-edition="hide-cards"]').forEach(function (b) {
       b.classList.toggle('is-active', dimmed);
+      rememberLabel(b);
+      var on = b.getAttribute('data-label-on') || CFG.labels.cardsOn;
+      var off = b.getAttribute('data-label-off') || CFG.labels.cardsOff || b.__label0;
+      setLabel(b, dimmed ? on : off);
     });
   }
   Edition.showMarks = setVisible;
@@ -579,8 +618,10 @@
   Edition.dimCards = setDim;
 
   function wire() {
-    var t = document.querySelector('[data-edition="marks-toggle"]');
-    if (t) t.addEventListener('click', function (e) { e.preventDefault(); setVisible(!visible); });
+    qsa('[data-edition="marks-toggle"]').forEach(function (t) {
+      rememberLabel(t);
+      t.addEventListener('click', function (e) { e.preventDefault(); setVisible(!visible); });
+    });
     var h = document.querySelector('[data-edition="marks-hide"]');
     if (h) h.addEventListener('click', function (e) { e.preventDefault(); setVisible(false); });
     qsa('[data-edition="dim-toggle"],[data-edition="hide-cards"]').forEach(function (d) {
@@ -662,6 +703,7 @@
       term: TERM, connected: !!db(), visible: visible, dimmed: dimmed,
       tool: tool, sticker: sticker, weight: weight,
       armed: armed(), loaded: MARKS.length, undoDepth: UNDO.length,
+      passThroughCount: qsa(CFG.passThrough).length,
       square: Math.round(side), dpr: dpr
     };
   };
