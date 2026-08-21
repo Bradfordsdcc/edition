@@ -22,10 +22,12 @@
   var FAVICON = {
     on: true,
     size: 128,        /* drawn large, shown small — stays sharp on retina */
-    pad: 0.03,        /* margin around the mark, as a fraction */
+    pad: 0.05,        /* margin around the mark, as a fraction */
     centre: true,     /* centre the half disc's own box, not the circle's */
-    bg: false,        /* transparent, matching the main site's favicon */
-    stroke: 1.25      /* paper-coloured outline, in px at 16px display */
+    bg: true,         /* false leaves it transparent, outline only */
+    stroke: 0         /* outline, in px at 16px display. Only useful
+                         when bg is false — on a paper ground it is
+                         paper on paper, and just eats into the radius. */
   };
 
   /* The tab title can carry the palette. Kept separate from og:title
