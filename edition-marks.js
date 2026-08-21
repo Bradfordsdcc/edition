@@ -24,6 +24,10 @@
   'use strict';
 
   var Edition = window.Edition = window.Edition || {};
+  function qsa(sel) {
+    return Array.prototype.slice.call(document.querySelectorAll(sel));
+  }
+  function qs(sel) { return document.querySelector(sel); }
 
   var CFG = {
     url: 'https://jtelqybifbiazhmltear.supabase.co',
@@ -350,6 +354,91 @@
   Edition.selectTool = selectTool;
   Edition.selectSticker = selectSticker;
 
+
+  /* ------------------------------------------------------------
+     Weight control.
+
+     Works either with a real <input type="range"> or with a hand-built
+     slider — a track element carrying data-edition="width" and a knob
+     inside it carrying data-edition="width-knob". The two end icons
+     can also step the weight up and down.
+     ------------------------------------------------------------ */
+  var track = null, knob = null;
+
+  function steps() { return CFG.weights.length; }
+
+  function setWeight(n, silent) {
+    weight = Math.max(1, Math.min(steps(), Math.round(n)));
+    if (track && track.tagName === 'INPUT') {
+      track.value = weight;
+    } else if (track && knob) {
+      var tw = track.clientWidth || 50;
+      var kw = knob.offsetWidth || 12;
+      var span = Math.max(0, tw - kw);
+      knob.style.position = 'absolute';
+      knob.style.left = (span * (weight - 1) / (steps() - 1)) + 'px';
+    }
+    qsa('[data-edition="width-step"]').forEach(function (el) {
+      el.textContent = weight;
+    });
+    if (!silent) document.documentElement.setAttribute('data-weight', weight);
+  }
+  Edition.setWeight = setWeight;
+
+  function weightFromX(clientX) {
+    var r = track.getBoundingClientRect();
+    var kw = knob ? (knob.offsetWidth || 12) : 12;
+    var span = Math.max(1, r.width - kw);
+    var x = clientX - r.left - kw / 2;
+    return 1 + Math.round((Math.max(0, Math.min(span, x)) / span) * (steps() - 1));
+  }
+
+  function wireWidth() {
+    track = qs('[data-edition="width"]');
+    knob = qs('[data-edition="width-knob"]');
+
+    if (track && track.tagName === 'INPUT') {
+      track.min = 1; track.max = steps(); track.step = 1;
+      weight = parseInt(track.value, 10) || CFG.defaultWeight;
+      track.addEventListener('input', function () {
+        setWeight(parseInt(track.value, 10) || CFG.defaultWeight);
+      });
+    } else if (track) {
+      /* the track needs to be a positioning context for the knob */
+      if (getComputedStyle(track).position === 'static') track.style.position = 'relative';
+      track.style.cursor = 'pointer';
+      track.style.touchAction = 'none';
+
+      var dragging = false;
+      track.addEventListener('pointerdown', function (e) {
+        dragging = true;
+        try { track.setPointerCapture(e.pointerId); } catch (err) {}
+        setWeight(weightFromX(e.clientX));
+        e.preventDefault();
+      });
+      track.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        setWeight(weightFromX(e.clientX));
+        e.preventDefault();
+      });
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
+        track.addEventListener(ev, function () { dragging = false; });
+      });
+    }
+
+    /* the two end icons step the weight */
+    qsa('[data-edition="width-down"]').forEach(function (el) {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', function (e) { e.preventDefault(); setWeight(weight - 1); });
+    });
+    qsa('[data-edition="width-up"]').forEach(function (el) {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', function (e) { e.preventDefault(); setWeight(weight + 1); });
+    });
+
+    setWeight(weight);
+  }
+
   /* ---------- path simplification (Douglas–Peucker) ---------- */
   function perp(p, a, b) {
     var dx = b[0] - a[0], dy = b[1] - a[1];
@@ -479,11 +568,14 @@
   }
   function setDim(on) {
     dimmed = !!on;
-    document.documentElement.classList.toggle('cards-dim', dimmed);
-    var b = document.querySelector('[data-edition="dim-toggle"]');
-    if (b) b.classList.toggle('is-active', dimmed);
+    document.documentElement.classList.toggle('cards-hidden', dimmed);
+    document.documentElement.classList.toggle('cards-dim', dimmed);  /* legacy */
+    qsa('[data-edition="dim-toggle"],[data-edition="hide-cards"]').forEach(function (b) {
+      b.classList.toggle('is-active', dimmed);
+    });
   }
   Edition.showMarks = setVisible;
+  Edition.hideCards = setDim;
   Edition.dimCards = setDim;
 
   function wire() {
@@ -491,8 +583,9 @@
     if (t) t.addEventListener('click', function (e) { e.preventDefault(); setVisible(!visible); });
     var h = document.querySelector('[data-edition="marks-hide"]');
     if (h) h.addEventListener('click', function (e) { e.preventDefault(); setVisible(false); });
-    var d = document.querySelector('[data-edition="dim-toggle"]');
-    if (d) d.addEventListener('click', function (e) { e.preventDefault(); setDim(!dimmed); });
+    qsa('[data-edition="dim-toggle"],[data-edition="hide-cards"]').forEach(function (d) {
+      d.addEventListener('click', function (e) { e.preventDefault(); setDim(!dimmed); });
+    });
     var u = document.querySelector('[data-edition="undo"]');
     if (u) u.addEventListener('click', function (e) { e.preventDefault(); undo(); });
 
@@ -508,13 +601,7 @@
         e.preventDefault(); selectSticker(el.getAttribute('data-sticker'));
       });
     });
-    var w = document.querySelector('[data-edition="width"]');
-    if (w) {
-      weight = parseInt(w.value, 10) || CFG.defaultWeight;
-      w.addEventListener('input', function () {
-        weight = Math.max(1, Math.min(CFG.weights.length, parseInt(w.value, 10) || 2));
-      });
-    }
+    wireWidth();
 
     cLive.addEventListener('pointerdown', onDown);
     cLive.addEventListener('pointermove', onMove);
@@ -548,7 +635,9 @@
   var rzTimer;
   function onResize() {
     clearTimeout(rzTimer);
-    rzTimer = setTimeout(function () { measure(); renderCommitted(); clearLive(); }, 120);
+    rzTimer = setTimeout(function () {
+      measure(); renderCommitted(); clearLive(); setWeight(weight, true);
+    }, 120);
   }
 
   function boot() {
@@ -576,6 +665,37 @@
       square: Math.round(side), dpr: dpr
     };
   };
+  /* Reports which hooks were found. The fastest way to see why a
+     button is doing nothing. */
+  Edition.marksCheck = function () {
+    var want = [
+      ['marks-toggle', '[data-edition="marks-toggle"]'],
+      ['marks-box',    '[data-edition="marks-box"]'],
+      ['tool pen',     '[data-edition="tool"][data-tool="pen"]'],
+      ['tool erase',   '[data-edition="tool"][data-tool="erase"]'],
+      ['sticker star', '[data-edition="sticker"][data-sticker="star"]'],
+      ['sticker heart','[data-edition="sticker"][data-sticker="heart"]'],
+      ['sticker reg',  '[data-edition="sticker"][data-sticker="reg"]'],
+      ['width track',  '[data-edition="width"]'],
+      ['width knob',   '[data-edition="width-knob"]'],
+      ['width down',   '[data-edition="width-down"]'],
+      ['width up',     '[data-edition="width-up"]'],
+      ['undo',         '[data-edition="undo"]'],
+      ['hide cards',   '[data-edition="dim-toggle"],[data-edition="hide-cards"]']
+    ];
+    var rows = want.map(function (w) {
+      var els = qsa(w[1]);
+      return { hook: w[0], found: els.length,
+               tag: els[0] ? els[0].tagName.toLowerCase() : '—',
+               classes: els[0] ? (els[0].className || '').slice(0, 40) : '—' };
+    });
+    if (console.table) console.table(rows);
+    var missing = rows.filter(function (r) { return !r.found; }).map(function (r) { return r.hook; });
+    if (missing.length) console.warn('missing hooks:', missing.join(', '));
+    else console.log('all hooks found');
+    return rows;
+  };
+
   Edition.marksSizes = function () {
     return CFG.weights.map(function (w, i) {
       return { step: i + 1, fraction: w,
