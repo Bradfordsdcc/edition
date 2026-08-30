@@ -23,6 +23,10 @@
     pastOrder: 'desc',
     recheckMs: 60000,        /* re-evaluate while the page sits open */
     infoStart: 'css',        /* 'css' keeps your placement, 'centre' overrides it */
+    /* Below this width the window is left entirely to CSS: no dragging,
+       and no inline left/top written, because an inline style always
+       beats a stylesheet and would strand the window mid-screen. */
+    infoDragMinWidth: 768,
     clockSeconds: true,
     clock12h: true,          /* 12-hour with am/pm, matching the cards */
 
@@ -345,8 +349,20 @@
      ------------------------------------------------------------ */
   var winEl = null, winOpen = false, winPos = null;
 
+  function canDragWindow() {
+    return window.innerWidth >= CFG.infoDragMinWidth;
+  }
+  /* hand position back to the stylesheet */
+  function clearInlinePosition() {
+    if (!winEl) return;
+    ['left', 'top', 'right', 'bottom'].forEach(function (k) {
+      winEl.style.removeProperty(k);
+    });
+    winPos = null;
+  }
+
   function clampWindow() {
-    if (!winEl || !winPos) return;
+    if (!winEl || !winPos || !canDragWindow()) return;
     var w = winEl.offsetWidth || 320, h = winEl.offsetHeight || 240;
     var vw = window.innerWidth, vh = window.innerHeight;
     /* keep a grabbable strip on screen rather than the whole window, so
@@ -395,11 +411,14 @@
       b.classList.toggle('is-active', winOpen);
     });
     if (winOpen) {
-      if (!winPos) {
+      if (!canDragWindow()) {
+        clearInlinePosition();           /* CSS anchors it on small screens */
+      } else if (!winPos) {
         if (CFG.infoStart === 'centre' || !adoptCssPosition()) centreWindow();
         else clampWindow();
+      } else {
+        clampWindow();
       }
-      else clampWindow();
       var first = winEl.querySelector('[data-edition="info-close"]');
       if (first && first.focus) { try { first.focus({ preventScroll: true }); } catch (e) {} }
     }
@@ -430,11 +449,18 @@
     /* ---- dragging ---- */
     var bar = winEl.querySelector('[data-edition="info-bar"]') || winEl;
     var dragging = false, grab = null;
-    bar.style.cursor = 'move';
-    bar.style.touchAction = 'none';
     bar.style.userSelect = 'none';
+    function syncDragAffordance() {
+      var on = canDragWindow();
+      bar.style.cursor = on ? 'move' : '';
+      /* leaving touch-action alone below the breakpoint means the bar can
+         still be scrolled past normally on a phone */
+      bar.style.touchAction = on ? 'none' : '';
+    }
+    syncDragAffordance();
 
     bar.addEventListener('pointerdown', function (e) {
+      if (!canDragWindow()) return;      /* anchored by CSS at this width */
       /* let buttons inside the bar still be clickable */
       if (e.target.closest && e.target.closest('[data-edition="info-close"]')) return;
       dragging = true;
@@ -455,7 +481,12 @@
     });
 
     window.addEventListener('resize', function () {
-      if (winOpen) clampWindow();
+      syncDragAffordance();
+      /* crossing the breakpoint has to drop any inline position, or a
+         window dragged on desktop stays stuck there when the viewport
+         narrows */
+      if (!canDragWindow()) clearInlinePosition();
+      else if (winOpen) clampWindow();
     });
 
     showWindow(false);
