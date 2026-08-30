@@ -23,7 +23,16 @@
     pastOrder: 'desc',
     recheckMs: 60000,        /* re-evaluate while the page sits open */
     clockSeconds: true,
-    clock12h: true           /* 12-hour with am/pm, matching the cards */
+    clock12h: true,          /* 12-hour with am/pm, matching the cards */
+
+    /* NOAA publishes monthly Mauna Loa means as plain text and, unusually
+       for a government endpoint, sends CORS headers — so this can be read
+       straight from the browser with no proxy. Updated around the 5th of
+       each month. */
+    co2Url: 'https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_mm_mlo.txt',
+    co2Fallback: 429.12,     /* shown if the fetch fails */
+    co2CacheHours: 12,       /* be a polite guest — one request per session */
+    co2Suffix: ' PPM'
   };
   Edition.pageConfig = CFG;
 
@@ -222,6 +231,86 @@
   }
   window.addEventListener('edition:palette', function (e) { paintContrast(e.detail); });
 
+
+  /* ------------------------------------------------------------
+     CO2
+
+     The file is whitespace-separated columns:
+       year  month  decimal_date  monthly_mean  deseasonalized  ndays  sdev  unc
+     Missing readings are -99.99 and get dropped.
+     ------------------------------------------------------------ */
+  function parseCo2(text) {
+    var out = [];
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i].trim();
+      if (!l || l.charAt(0) === '#') continue;
+      var p = l.split(/\s+/);
+      if (p.length < 4) continue;
+      var y = +p[0], m = +p[1], dec = +p[2], v = +p[3];
+      if (!isFinite(v) || v < 0) continue;
+      out.push([dec, v, y, m]);
+    }
+    return out;
+  }
+
+  function showCo2(value, when) {
+    var els = document.querySelectorAll('[data-edition="co2"]');
+    Array.prototype.forEach.call(els, function (el) {
+      var txt = value.toFixed(2) + CFG.co2Suffix;
+      /* the element also holds the CO2 label with its subscript, so only
+         the number is replaced — either a dedicated span, or the last
+         text node if there isn't one */
+      var slot = el.querySelector('[data-edition="co2-value"]');
+      if (slot) { slot.textContent = txt; return; }
+      var last = null;
+      for (var i = el.childNodes.length - 1; i >= 0; i--) {
+        if (el.childNodes[i].nodeType === 3) { last = el.childNodes[i]; break; }
+      }
+      if (last) last.nodeValue = ' ' + txt;
+      else el.appendChild(document.createTextNode(' ' + txt));
+    });
+    Edition.co2 = { value: value, when: when || null };
+  }
+
+  function loadCo2() {
+    var KEY = 'edition:co2';
+    var maxAge = CFG.co2CacheHours * 3600 * 1000;
+
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) {
+        var c = JSON.parse(raw);
+        if (c && c.ts && (Date.now() - c.ts) < maxAge && c.v) {
+          showCo2(c.v, c.when);
+          Edition.co2Series = c.series || null;
+          return;
+        }
+      }
+    } catch (e) {}
+
+    showCo2(CFG.co2Fallback);          /* something sensible while it loads */
+
+    if (!window.fetch) return;
+    fetch(CFG.co2Url, { cache: 'no-cache' })
+      .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+      .then(function (t) {
+        var rows = parseCo2(t);
+        if (!rows.length) return;
+        var last = rows[rows.length - 1];
+        var when = last[2] + '-' + ('0' + last[3]).slice(-2);
+        showCo2(last[1], when);
+        Edition.co2Series = rows.map(function (r) { return [r[0], r[1]]; });
+        try {
+          localStorage.setItem(KEY, JSON.stringify({
+            ts: Date.now(), v: last[1], when: when, series: Edition.co2Series
+          }));
+        } catch (e) {}
+      })
+      .catch(function (e) { console.warn('[co2] using fallback:', e); });
+  }
+  Edition.loadCo2 = loadCo2;
+
   /* ------------------------------------------------------------
      Back to top
      ------------------------------------------------------------ */
@@ -276,6 +365,7 @@
     if (Edition.palette) paintContrast(Edition.palette);
     wireTop();
     wireModal();
+    loadCo2();
   }
 
   if (document.readyState === 'complete') boot();
