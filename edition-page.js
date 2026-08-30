@@ -22,6 +22,7 @@
        "what did I just miss" will start */
     pastOrder: 'desc',
     recheckMs: 60000,        /* re-evaluate while the page sits open */
+    infoStart: 'css',        /* 'css' keeps your placement, 'centre' overrides it */
     clockSeconds: true,
     clock12h: true,          /* 12-hour with am/pm, matching the cards */
 
@@ -327,28 +328,137 @@
   }
 
   /* ------------------------------------------------------------
-     Info modal
-     ------------------------------------------------------------ */
-  function wireModal() {
-    var open = document.querySelector('[data-edition="info-open"]');
-    var modal = document.querySelector('[data-edition="info-modal"]');
-    if (!open || !modal) return;               /* not built yet — skip quietly */
-    var close = document.querySelector('[data-edition="info-close"]');
+     Info window
 
-    function show(on) {
-      modal.style.display = on ? '' : 'none';
-      modal.classList.toggle('is-open', on);
-      document.documentElement.classList.toggle('edi-modal-open', on);
-    }
-    show(false);
-    open.style.cursor = 'pointer';
-    open.addEventListener('click', function (e) { e.preventDefault(); show(true); });
-    if (close) close.addEventListener('click', function (e) { e.preventDefault(); show(false); });
-    modal.addEventListener('click', function (e) { if (e.target === modal) show(false); });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') show(false);
+     Deliberately not modal: no overlay, the page stays usable, and the
+     window can be dragged aside rather than dismissed. Behaves like a
+     small application window that happens to live on the page.
+
+     Elements:
+       [data-edition="info-open"]    opens it
+       [data-edition="info-modal"]   the window
+       [data-edition="info-bar"]     the drag handle, usually the title bar
+       [data-edition="info-close"]   closes it
+
+     The script only toggles `is-open` and writes left/top. Everything
+     else stays in your CSS.
+     ------------------------------------------------------------ */
+  var winEl = null, winOpen = false, winPos = null;
+
+  function clampWindow() {
+    if (!winEl || !winPos) return;
+    var w = winEl.offsetWidth || 320, h = winEl.offsetHeight || 240;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    /* keep a grabbable strip on screen rather than the whole window, so
+       it can hang off an edge the way a real window does */
+    var keep = 60;
+    winPos.x = Math.min(Math.max(winPos.x, -(w - keep)), vw - keep);
+    winPos.y = Math.min(Math.max(winPos.y, 0), vh - 34);
+    /* Webflow may have positioned this with right/bottom. Those have to
+       be released or the box is anchored from both sides at once, which
+       stretches it and makes dragging do nothing visible. */
+    winEl.style.right = 'auto';
+    winEl.style.bottom = 'auto';
+    winEl.style.left = Math.round(winPos.x) + 'px';
+    winEl.style.top = Math.round(winPos.y) + 'px';
+  }
+
+  function centreWindow() {
+    if (!winEl) return;
+    var w = winEl.offsetWidth || 320, h = winEl.offsetHeight || 240;
+    winPos = {
+      x: Math.max(8, (window.innerWidth - w) / 2),
+      y: Math.max(8, (window.innerHeight - h) / 2 - 30)
+    };
+    clampWindow();
+  }
+
+  /* On the first open, take whatever position your CSS gave the window
+     and carry on from there — so a window placed bottom-left in the
+     Designer opens bottom-left, and is still draggable from it. */
+  function adoptCssPosition() {
+    if (!winEl) return false;
+    var r = winEl.getBoundingClientRect();
+    if (!r.width && !r.height) return false;
+    winPos = { x: r.left, y: r.top };
+    return true;
+  }
+
+  function showWindow(on) {
+    if (!winEl) return;
+    winOpen = !!on;
+    winEl.classList.toggle('is-open', winOpen);
+    /* the class has to land before getBoundingClientRect is any use —
+       a display:none element measures as zero */
+    document.documentElement.classList.toggle('info-open', winOpen);
+    document.querySelectorAll('[data-edition="info-open"]').forEach(function (b) {
+      b.classList.toggle('is-active', winOpen);
     });
-    Edition.showInfo = show;
+    if (winOpen) {
+      if (!winPos) {
+        if (CFG.infoStart === 'centre' || !adoptCssPosition()) centreWindow();
+        else clampWindow();
+      }
+      else clampWindow();
+      var first = winEl.querySelector('[data-edition="info-close"]');
+      if (first && first.focus) { try { first.focus({ preventScroll: true }); } catch (e) {} }
+    }
+  }
+  Edition.showInfo = showWindow;
+  Edition.centreInfo = centreWindow;
+
+  function wireModal() {
+    winEl = document.querySelector('[data-edition="info-modal"]');
+    if (!winEl) return;                       /* not built yet — stay quiet */
+
+    winEl.style.position = 'fixed';
+    if (!winEl.getAttribute('role')) winEl.setAttribute('role', 'dialog');
+    winEl.setAttribute('aria-label', winEl.getAttribute('aria-label') || 'Information');
+
+    document.querySelectorAll('[data-edition="info-open"]').forEach(function (b) {
+      b.style.cursor = 'pointer';
+      b.addEventListener('click', function (e) { e.preventDefault(); showWindow(!winOpen); });
+    });
+    document.querySelectorAll('[data-edition="info-close"]').forEach(function (b) {
+      b.style.cursor = 'pointer';
+      b.addEventListener('click', function (e) { e.preventDefault(); showWindow(false); });
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && winOpen) showWindow(false);
+    });
+
+    /* ---- dragging ---- */
+    var bar = winEl.querySelector('[data-edition="info-bar"]') || winEl;
+    var dragging = false, grab = null;
+    bar.style.cursor = 'move';
+    bar.style.touchAction = 'none';
+    bar.style.userSelect = 'none';
+
+    bar.addEventListener('pointerdown', function (e) {
+      /* let buttons inside the bar still be clickable */
+      if (e.target.closest && e.target.closest('[data-edition="info-close"]')) return;
+      dragging = true;
+      var r = winEl.getBoundingClientRect();
+      grab = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+      winPos = { x: r.left, y: r.top };
+      try { bar.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+    });
+    bar.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      winPos = { x: e.clientX - grab.dx, y: e.clientY - grab.dy };
+      clampWindow();
+      e.preventDefault();
+    });
+    ['pointerup', 'pointercancel'].forEach(function (ev) {
+      bar.addEventListener(ev, function () { dragging = false; });
+    });
+
+    window.addEventListener('resize', function () {
+      if (winOpen) clampWindow();
+    });
+
+    showWindow(false);
   }
 
   /* ------------------------------------------------------------
