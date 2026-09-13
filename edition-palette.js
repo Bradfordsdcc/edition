@@ -361,7 +361,6 @@
     'Juniper #74918E',
     'Cypress #585D40',
     'Bottle #093624',
-    'Racing Green #014600',
     'Prussian #3F585F',
     'Navy #01153E',
     'Marine #042E60',
@@ -494,7 +493,7 @@
      a colour sitting in the middle is close to both ends, so it cannot
      reach 7:1 against anything at all. */
   var MIN_RATIO = 7;
-  var MAX_RATIO = 18;
+  var MAX_RATIO = 16;
 
   function hexToRgb(h) {
     h = h.replace('#', '');
