@@ -135,7 +135,7 @@
     'Minium #D94E1F',
     'Lampblack #1B1B1B',
     'British Racing Green #05480D',
-    'International Klein Blue #002FA6',
+    'Klein Blue #002FA6',
     'Majorelle Blue #6050DC',
     'Isabelline #F4F0EC',
     'Davy\'s Grey #535554',
@@ -406,7 +406,7 @@
     'Pikachu Yellow #FFCB05',
     'Nintendo Red #E60012',
     'Kuromi Purple #8260A2',
-    'Pompompurin Yellow #FFF9B0',
+    'Pompompurin #FFF9B0',
     'Akira Red #D7262F',
     'Brat Green #8ACE00',
     'Discord Blurple #5865F2',
@@ -422,8 +422,8 @@
      would meet AAA but drops every mid-luminance colour from the list —
      a colour sitting in the middle is close to both ends, so it cannot
      reach 7:1 against anything at all. */
-  var MIN_RATIO = 4.5;
-  var MAX_RATIO = 21;
+  var MIN_RATIO = 6.0;
+  var MAX_RATIO = 20;
 
   function hexToRgb(h) {
     h = h.replace('#', '');
