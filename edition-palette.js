@@ -60,15 +60,24 @@
   }
   /* ============================================================
      THE LIST
-     ============================================================ */
 
-   var LIST = [
+     Palettes are drawn from these named colours rather than generated,
+     so every name is exactly right by construction — Khaki can only ever
+     appear on the actual Khaki. Editing this list is the whole
+     maintenance story: add a line, remove a line, nothing else changes.
+
+     Values are the published ones where a published one exists.
+     ============================================================ */
+  var LIST = [
     'Prussian Blue #003366',
     'Viridian #1E9167',
     'Alizarin #E32636',
+    'Cadmium Red #E30022',
     'Cadmium Yellow #FFF600',
+    'Cadmium Orange #ED872D',
     'Ultramarine #1805DB',
     'Vermilion #F4320C',
+    'Payne\'s Grey #536878',
     'Naples Yellow #FADA5F',
     'Rose Madder #E33636',
     'Burnt Sienna #A93400',
@@ -77,6 +86,7 @@
     'Burnt Umber #8A3324',
     'Yellow Ochre #C39143',
     'Venetian Red #C80815',
+    'Van Dyke Brown #664228',
     'Malachite #0BDA51',
     'Lapis Lazuli #26619C',
     'Verdigris #43B3AE',
@@ -125,7 +135,7 @@
     'Minium #D94E1F',
     'Lampblack #1B1B1B',
     'British Racing Green #05480D',
-    'Klein Blue #002FA6',
+    'International Klein Blue #002FA6',
     'Majorelle Blue #6050DC',
     'Isabelline #F4F0EC',
     'Davy\'s Grey #535554',
@@ -133,6 +143,8 @@
     'Byzantium #702963',
     'Wedgewood Blue #5A7D9A',
     'Pompeian Red #A82A38',
+    'Van Gogh Yellow #F2C12E',
+    'Rembrandt Brown #5A4632',
     'Titian Red #BD5620',
     'Veronese Green #4F7942',
     'Bordeaux #7B002C',
@@ -150,7 +162,12 @@
     'Copenhagen Blue #21638B',
     'Bristol Blue #558F91',
     'Oxford Blue #002147',
+    'Cambridge Blue #A3C1AD',
     'Eton Blue #AAD4D1',
+    'Harvard Crimson #C90016',
+    'Yale Blue #0F4D92',
+    'Princeton Orange #FF8F00',
+    'International Orange #BA160C',
     'Safety Orange #FF6600',
     'Safety Yellow #EED202',
     'Air Force Blue #5D8AA8',
@@ -170,8 +187,8 @@
     'Field Drab #6C541E',
     'Marine Blue #01386A',
     'Federal Blue #43628B',
-    'Fluro Pink #FE1493',
-    'Fluro Green #08FF08',
+    'Fluorescent Pink #FE1493',
+    'Fluorescent Green #08FF08',
     'Aqua #0FF0FE',
     'Bright Red #FF000D',
     'Kelly Green #339C5E',
@@ -203,8 +220,6 @@
     'Alabaster #F3E7DB',
     'Porcelain #DDDCDB',
     'Eggshell #F0EAD6',
-    'Nonbinary Purple #9C59D1',
-    'Nonbinary Yellow #FCF434',
     'Cream #FFFFC2',
     'Vanilla #F3E5AB',
     'Parchment #FEFCAF',
@@ -349,6 +364,7 @@
     'Juniper #74918E',
     'Cypress #585D40',
     'Bottle #093624',
+    'Racing Green #014600',
     'Prussian #3F585F',
     'Navy #01153E',
     'Marine #042E60',
@@ -390,7 +406,7 @@
     'Pikachu Yellow #FFCB05',
     'Nintendo Red #E60012',
     'Kuromi Purple #8260A2',
-    'Pompompurin #FFF9B0',
+    'Pompompurin Yellow #FFF9B0',
     'Akira Red #D7262F',
     'Brat Green #8ACE00',
     'Discord Blurple #5865F2',
@@ -398,95 +414,52 @@
     'Millennial Pink #F3CFC6',
     'Traffic Cone #FF5800',
     'Tennis Ball #CCFF00',
-    'Off White #FFFFE4',
-    'Antique White #ECE6D5',
-    'Floral White #FFFAF0',
-    'Cornsilk #FFF8DC',
-    'Lemon Chiffon #FFFACD',
-    'Mint Cream #F5FFFA',
-    'Misty Rose #FFE4E1',
-    'Light Cyan #E0FFFF',
-    'Light Yellow #FFFE7A',
-    'Bone White #F1E1B0',
-    'Pearl White #F3F2ED',
-    'Opal #AEE0E4',
-    'Moonstone #3AA8C1',
-    'Tofu #E6E5D6',
-    'Oat Milk #DEDACD',
-    'Eggnog #FDEA9F',
-    'Buttercream #EFE0CD',
-    'Marshmallow #F0EEE4',
-    'Key Lime #AEFF6E',
-    'Apricot Cream #F1BD89',
-    'Pale Lilac #D8B5BF',
-    'Pale Sage #ACBDA1',
-    'Pale Sky #BDF6FE',
-    'Ice Green #87D8C3',
-    'Frosted Glass #EAF0F0',
-    'Sea Glass #AFC1BF',
-    'Soft Peach #EEDFDE',
-    'Soft Blue #6488EA',
-    'Soft Green #6FC276',
-    'Barely Blue #DDE0DF',
-    'Peach Blossom #DC7A83',
-    'Tea Rose #F883C2',
-    'Dusty Rose #B56F76',
-    'Petal Pink #F4E5E0',
-    'Coral Blush #E5A090',
-    'Buttercup #DA9429',
-    'Primrose #D6859F',
-    'Banana #FFFC79',
-    'Honeycomb #DDAA11',
-    'Pistachio Cream #C5D498',
-    'Eucalyptus #329760',
-    'Seafoam Green #99BB88',
-    'Wintergreen #20F986',
-    'Aqua Mist #A0C9CB',
-    'Bluebell #333399',
-    'Cornflower Blue #6C91C5',
-    'Periwinkle Blue #8F99FB',
-    'Lilac Mist #E4E4E7',
-    'Sandstone #C9AE74',
-    'Latte #C5A582',
-    'Biscuit #FEEDCA',
-    'Raven #0B0B0B',
-    'Iron #5E5E5E',
-    'Granite #746A5E',
-    'Shale #4A3F41',
-    'Carbon #333333',
-    'Dusk #4E5481',
-    'Nightfall #43535E',
-    'Umbra #211E1F',
-    'Thunder #4D4D4B',
-    'Deep Sea #167E65',
-    'Dark Teal #014D4E',
-    'Dark Olive #373E02',
-    'Deep Plum #4A2A59',
-    'Deep Teal #00555A',
-    'Deep Green #02590F',
-    'Midnight Blue #020035',
-    'Ink Black #252024',
-    'Gesso #F4F1E8',
-    'Chalk White #F0EEE9',
-    'Ricotta #F6F2E7',
-    'Porcelain White #F1EFEA',
-    'Rose Water #F7E4E4',
-    'Fog Grey #CFD2CE',
   ];
 
 
   /* Two floors rather than one, because the same ratio does not read the
      same in both directions: light text on a dark ground holds up better
-     than dark text on a light one. So a pair can qualify in one
-     orientation and not the other, and each orientation is treated as its
-     own candidate.
+     than dark text on a light one.
 
-     The practical effect is that saturated mid-tones — most of the Pride
-     colours, Kirby Pink, City Design Red — become usable as ink on a dark
-     ground, where a single 7:1 floor excluded them from everything. */
+     Above FREE_ABOVE, contrast alone is enough. Below it a pair also has
+     to clear a strain ceiling, because WCAG is blind to hue — Chartreuse
+     on Han Purple and Newsprint on Onyx score the same ratio, and only
+     one of them is readable. */
   var MIN_ON_LIGHT = 6.5;   /* dark ink, light paper */
   var MIN_ON_DARK  = 5.5;   /* light ink, dark paper */
-  var MAX_RATIO    = 18;
+  var MAX_RATIO    = 21;
+
+  var FREE_ABOVE   = 7;     /* above this ratio, no chromatic test */
+  var STRAIN_MAX   = 0.15;
+  var STRAIN_BASE  = 0.6;
+  var HUE_WEIGHT   = 2;
+
+  /* Vibration needs BOTH colours saturated and their hues opposed, so the
+     smaller of the two chromas is the right term — a pair with one quiet
+     member cannot vibrate however far apart the hues are. That is why a
+     plain chroma ceiling would wrongly reject saturated-on-neutral. */
+  function oklch(rgb) {
+    var f = function (v) {
+      v /= 255;
+      return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    var r = f(rgb[0]), g = f(rgb[1]), b = f(rgb[2]);
+    var l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    var m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    var s2 = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    var A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s2;
+    var B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s2;
+    var H = Math.atan2(B, A) * 180 / Math.PI;
+    if (H < 0) H += 360;
+    return { c: Math.hypot(A, B), h: H };
+  }
+  function hueGap(a, b) {
+    var x = Math.abs(a - b) % 360;
+    return Math.min(x, 360 - x);
+  }
+  function strain(a, b) {
+    return Math.min(a.c, b.c) * (STRAIN_BASE + HUE_WEIGHT * (hueGap(a.h, b.h) / 180));
+  }
 
   function hexToRgb(h) {
     h = h.replace('#', '');
@@ -522,13 +495,15 @@
       var name = s.slice(0, cut).trim();
       var hex = s.slice(cut + 1).trim().toUpperCase();
       if (!/^#[0-9A-F]{6}$/.test(hex)) continue;
-      COLORS.push({ name: name, hex: hex, L: relLum(hexToRgb(hex)) });
+      var rgb = hexToRgb(hex), lch = oklch(rgb);
+      COLORS.push({ name: name, hex: hex, L: relLum(rgb), c: lch.c, h: lch.h });
       BY_HEX[hex] = name;
     }
     for (var a = 0; a < COLORS.length; a++) {
       for (var b = a + 1; b < COLORS.length; b++) {
         var r = ratio(COLORS[a].L, COLORS[b].L);
         if (r > MAX_RATIO) continue;
+        if (r < FREE_ABOVE && strain(COLORS[a], COLORS[b]) > STRAIN_MAX) continue;
         var lightIdx = COLORS[a].L > COLORS[b].L ? a : b;
         var darkIdx  = COLORS[a].L > COLORS[b].L ? b : a;
         /* dark ink on light paper */
@@ -774,11 +749,6 @@
     }
     return { count: n, lightOnDark: flips, minRatio: +min.toFixed(2),
              maxRatio: +max.toFixed(2), sample: sample };
-  };
-  Edition.contrast = function (a, b) {
-    function rgb(h) { h = h.replace('#',''); return [0,2,4].map(function(i){
-      return parseInt(h.substr(i,2),16); }); }
-    return ratio(rgb(a), rgb(b));
   };
 
   if (document.readyState === 'loading') {
