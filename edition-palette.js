@@ -134,27 +134,27 @@
      muted and a vivid version.
      ------------------------------------------------------------ */
   var FAMILIES = [
-    [355, 12,'Rose',   ['Oxblood','Carmine','Rosewood','Cerise','Rose','Watermelon','Blush','Flamingo','Rose Water','Candy Floss']],
-    [ 12, 25,'Red',   ['Garnet','Ruby','Barn Red','Cherry','Clay Rose','Poppy','Rose Quartz','Coral Pink','Powder Rose','Peach Blossom']],
-    [ 25, 38,'Scarlet',   ['Maroon','Scarlet','Brick','Vermilion','Salmon','Tomato','Shell','Peach','Seashell','Apricot Cream']],
+    [355, 12,'Rose',   ['Oxblood','Carmine','Bordeaux','Cerise','Tea Rose','Watermelon','Blush','Flamingo','Rose Water','Candy Floss']],
+    [ 12, 25,'Red',   ['Garnet','Ruby','Barn Red','Cherry','Clay Rose','Poppy','Rose Quartz','Coral Pink','Rose Milk','Peach Blossom']],
+    [ 25, 38,'Scarlet',   ['Maroon','Poppy Red','Brick','Vermilion','Salmon','Tomato','Conch','Peach','Seashell','Apricot Cream']],
     [ 38, 50,'Ember',   ['Mahogany','Cinnabar','Rust','Persimmon','Melon','Papaya','Apricot','Sherbet','Peach Milk','Creamsicle']],
     [ 50, 66,'Orange',   ['Umber','Burnt Orange','Clay','Tangerine','Sandstone','Marmalade','Buff','Cantaloupe','Bisque','Melon Cream']],
-    [ 66, 80,'Amber',   ['Bistre','Amber','Ochre','Marigold','Fawn','Honey','Oat','Buttercup','Almond','Lemon Cream']],
-    [ 80, 95,'Gold',   ['Bronze','Old Gold','Mustard','Amber Gold','Wheat','Saffron','Vanilla','Sunflower','Cream','Daffodil']],
-    [ 95,118,'Yellow',   ['Olive Drab','Citrine','Khaki','Mustard Yellow','Straw','Chrome Yellow','Parchment','Lemon','Ivory','Citron']],
-    [118,130,'Lime',   ['Moss','Chartreuse','Sage','Acid Green','Celadon','Lime','Lime Wash','Neon Lime','Pale Lime','Key Lime']],
-    [130,145,'Green',   ['Loden','Kelly Green','Fern','Grass','Willow','Spring Green','Pistachio','Electric Green','Green Tea','Mint Ice']],
-    [145,160,'Emerald',   ['Pine','Emerald','Ivy','Shamrock','Eucalyptus','Jade','Honeydew','Mint','Dew','Peppermint']],
-    [160,185,'Sea',   ['Bottle','Malachite','Verdigris','Sea Green','Sea Glass','Aquamarine','Seafoam','Ice Green','Sea Mist','Glacier Green']],
-    [185,205,'Teal',   ['Deep Teal','Viridian','Slate Teal','Turquoise','Celadon Blue','Aqua','Powder','Ice Blue','Vapour','Pool']],
+    [ 66, 80,'Amber',   ['Bistre','Amber Gold','Ochre','Marigold','Fawn','Honey','Wheatgerm','Buttercup','Almond','Lemon Cream']],
+    [ 80, 95,'Gold',   ['Bronze','Old Gold','Mustard','Goldenrod','Wheat','Saffron','Vanilla','Sunflower','Custard','Daffodil']],
+    [ 95,118,'Yellow',   ['Olive Drab','Citrine','Khaki','Mustard Yellow','Straw','Chrome Yellow','Flax','Lemon','Butter','Citron']],
+    [118,130,'Lime',   ['Moss','Chartreuse','Olivine','Acid Green','Celadon','Key Lime','Lime Wash','Neon Lime','Pale Lime','Lime Zest']],
+    [130,145,'Green',   ['Loden','Kelly Green','Fern','Grass','Leaf','Spring Green','Pistachio','Electric Green','Verdure','Mint Ice']],
+    [145,160,'Emerald',   ['Pine','Viridian Green','Ivy','Shamrock','Eucalyptus','Jade','Honeydew','Mint','Spearmint','Peppermint']],
+    [160,185,'Sea',   ['Bottle','Malachite','Verdigris','Sea Green','Sea Glass','Aquamarine','Seafoam','Ice Green','Seaspray','Glacier Green']],
+    [185,205,'Teal',   ['Deep Teal','Viridian','Deep Cyan','Turquoise','Celadon Blue','Aqua','Powder','Ice Blue','Aqua Mist','Pool']],
     [205,230,'Cyan',   ['Spruce','Petrol','Slate Cyan','Peacock','Mist Blue','Cerulean','Glacier','Powder Blue','Cloud Blue','Robin Egg']],
-    [230,250,'Sky',   ['Prussian','Azure','Steel Blue','Cornflower','Chambray','Sky Blue','Bluebell','Frost','Sky Wash','Cirrus']],
-    [250,268,'Blue',   ['Navy','Sapphire','Denim','Cobalt','Wedgwood','Iris','Periwinkle','Alice Blue','Moonstone','Forget Me Not']],
-    [268,285,'Indigo',   ['Midnight','Ultramarine','Slate Blue','Klein Blue','Dusk','Hyacinth','Wisteria','Lilac Blue','Lavender Grey','Iris Mist']],
-    [285,305,'Violet',   ['Aubergine','Violet','Heather','Amethyst','Lavender','Orchid','Lilac','Powder Violet','Orchid Mist','Violet Ice']],
+    [230,250,'Sky',   ['Prussian','Azure','Steel Blue','Cornflower','Chambray','Sky Blue','Bluebell','Pale Azure','Cirrus Blue','Cirrus']],
+    [250,268,'Blue',   ['Navy','Sapphire','Denim','Cobalt','Wedgwood','Iris','Periwinkle','Alice Blue','Pale Iris','Forget Me Not']],
+    [268,285,'Indigo',   ['Midnight','Ultramarine','Slate Blue','Klein Blue','Dusk','Hyacinth','Lupine','Lilac Blue','Lavender Grey','Iris Mist']],
+    [285,305,'Violet',   ['Aubergine','Amethyst Violet','Heather','Amethyst','Lavender','Orchid','Lilac','Powder Violet','Orchid Mist','Violet Ice']],
     [305,320,'Purple',   ['Plum','Byzantium','Mulberry','Grape','Thistle','Magenta Rose','Mauve','Powder Lilac','Dusty Lilac','Lilac Wash']],
-    [320,338,'Magenta',   ['Wine','Tyrian','Raspberry','Fuchsia','Peony','Magenta','Cotton Candy','Bubblegum','Pink Pearl','Fairy Floss']],
-    [338,355,'Pink',   ['Merlot','Ruby Pink','Cranberry','Rose Red','Dusty Pink','Punch','Petal','Ballet Pink','Shell Pink','Blossom']]
+    [320,338,'Magenta',   ['Wine','Tyrian','Raspberry','Fuchsia','Peony','Magenta Pink','Cotton Candy','Bubblegum','Pink Pearl','Fairy Floss']],
+    [338,355,'Pink',   ['Merlot','Ruby Pink','Cranberry','Rose Red','Dusty Pink','Punch','Rose Wash','Ballet Pink','Shell Pink','Blossom']]
   ];
   /* Neutrals carry about a sixth of every colour the generator makes, and
      used to share only fifteen names — so Chalk alone was seven percent of
@@ -170,16 +170,16 @@
   var TINT_N = {
     red:    ['Pitch','Clove','Cocoa','Rosewood','Dusty Rose','Blush Grey',
              'Shell','Powder Rose','Porcelain','Petal','Whisper'],
-    yellow: ['Bistre','Espresso','Bark','Umber','Taupe','Putty',
-             'Oat','Cream','Ivory','Vellum','Parchment'],
-    green:  ['Bottle Grey','Loden','Moss Grey','Sage Grey','Sage','Celadon',
-             'Willow','Green Tea','Eggshell','Dew','Mint Wash'],
+    yellow: ['Peat','Espresso','Bark','Drab','Taupe','Putty',
+             'Oat','Cream','Eggshell','Ivory','Parchment'],
+    green:  ['Pine Grey','Fern Grey','Moss Grey','Sage Grey','Sage','Pale Sage',
+             'Willow','Green Tea','Tea Wash','Dew','Mint Wash'],
     cyan:   ['Abyss','Deep Slate','Teal Grey','Slate Teal','Mineral','Sea Mist',
              'Vapour','Glass','Frost','Ice','Aqua Wash'],
     blue:   ['Midnight Grey','Gunmetal','Payne Grey','Denim Grey','Bluestone','Dove',
-             'Mist','Cloud','Alabaster','Moon','Sky Wash'],
+             'Mist','Cloud','Alabaster','Moonstone','Sky Wash'],
     violet: ['Aubergine Grey','Iron Violet','Mauve Grey','Heather Grey','Lilac Grey',
-             'Orchid Grey','Wisteria','Lavender Mist','Moonstone','Iris Wash','Violet Wash']
+             'Orchid Grey','Wisteria','Lavender Mist','Opal','Iris Wash','Violet Wash']
   };
   var TINT_SECTORS = [
     [345, 25, 'red'], [25, 95, 'yellow'], [95, 165, 'green'],
