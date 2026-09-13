@@ -22,7 +22,7 @@
   var FAVICON = {
     on: true,
     size: 128,        /* drawn large, shown small — stays sharp on retina */
-    pad: 0.09,        /* margin around the mark, as a fraction */
+    pad: 0.05,        /* margin around the mark, as a fraction */
     centre: true,     /* centre the half disc's own box, not the circle's */
     bg: true,         /* false leaves it transparent, outline only */
     stroke: 0         /* outline, in px at 16px display. Only useful
@@ -156,10 +156,53 @@
     [320,338,'Magenta',   ['Wine','Tyrian','Raspberry','Fuchsia','Peony','Magenta','Cotton Candy','Bubblegum','Pink Pearl','Fairy Floss']],
     [338,355,'Pink',   ['Merlot','Ruby Pink','Cranberry','Rose Red','Dusty Pink','Punch','Petal','Ballet Pink','Shell Pink','Blossom']]
   ];
-  var WARM_N = [[0.20,'Ink'],[0.32,'Espresso'],[0.44,'Bark'],[0.56,'Umber Grey'],
-                [0.68,'Taupe'],[0.80,'Putty'],[0.90,'Oat'],[1.01,'Bone']];
-  var COOL_N = [[0.20,'Ink'],[0.32,'Charcoal'],[0.44,'Graphite'],[0.56,'Slate'],
-                [0.68,'Steel'],[0.80,'Fog'],[0.90,'Mist'],[1.01,'Chalk']];
+  /* Neutrals carry about a sixth of every colour the generator makes, and
+     used to share only fifteen names — so Chalk alone was seven percent of
+     all output. They now work in two layers.
+
+     A colour with essentially no chroma gets a true grey name. A colour
+     with a faint tint keeps its hue but is still named as a neutral, in
+     one of six hue sectors, which is what separates a pale green-grey
+     from a pale blue-grey instead of calling both Mist. */
+  var GREY_N = ['Ink','Soot','Charcoal','Graphite','Slate','Steel',
+                'Ash','Silver','Pearl','Chalk','Snow'];
+
+  var TINT_N = {
+    red:    ['Pitch','Clove','Cocoa','Rosewood','Dusty Rose','Blush Grey',
+             'Shell','Powder Rose','Porcelain','Petal','Whisper'],
+    yellow: ['Bistre','Espresso','Bark','Umber','Taupe','Putty',
+             'Oat','Cream','Ivory','Vellum','Parchment'],
+    green:  ['Bottle Grey','Loden','Moss Grey','Sage Grey','Sage','Celadon',
+             'Willow','Green Tea','Eggshell','Dew','Mint Wash'],
+    cyan:   ['Abyss','Deep Slate','Teal Grey','Slate Teal','Mineral','Sea Mist',
+             'Vapour','Glass','Frost','Ice','Aqua Wash'],
+    blue:   ['Midnight Grey','Gunmetal','Payne Grey','Denim Grey','Bluestone','Dove',
+             'Mist','Cloud','Alabaster','Moon','Sky Wash'],
+    violet: ['Aubergine Grey','Iron Violet','Mauve Grey','Heather Grey','Lilac Grey',
+             'Orchid Grey','Wisteria','Lavender Mist','Moonstone','Iris Wash','Violet Wash']
+  };
+  var TINT_SECTORS = [
+    [345, 25, 'red'], [25, 95, 'yellow'], [95, 165, 'green'],
+    [165, 240, 'cyan'], [240, 290, 'blue'], [290, 345, 'violet']
+  ];
+  /* Eleven steps, bunched at the pale end. Papers are generated between
+     84 and 100 percent value, so almost all of them used to land in one
+     band — which is why three names were carrying a sixth of the output. */
+  var NEUTRAL_STEPS = [0.16, 0.28, 0.40, 0.52, 0.63, 0.72,
+                       0.80, 0.87, 0.92, 0.96, 1.01];
+
+  function neutralSector(h) {
+    for (var i = 0; i < TINT_SECTORS.length; i++) {
+      var a = TINT_SECTORS[i][0], b = TINT_SECTORS[i][1];
+      if (a < b) { if (h >= a && h < b) return TINT_SECTORS[i][2]; }
+      else { if (h >= a || h < b) return TINT_SECTORS[i][2]; }
+    }
+    return 'yellow';
+  }
+  function neutralBand(L) {
+    for (var i = 0; i < NEUTRAL_STEPS.length; i++) if (L < NEUTRAL_STEPS[i]) return i;
+    return NEUTRAL_STEPS.length - 1;
+  }
 
   function hexToRgb(h) {
     h = h.replace('#', '');
@@ -209,12 +252,20 @@
     var lch = toOklch(hexToRgb(hex));
     var L = lch[0], C = lch[1], H = lch[2];
 
-    /* too little chroma to carry a hue at all */
-    if (C < 0.024 + 0.014 * L) {
-      var warm = (H >= 20 && H < 130) || H >= 330;
-      var set = warm ? WARM_N : COOL_N;
-      for (var i = 0; i < set.length; i++) if (L < set[i][0]) return set[i][1];
-      return set[set.length - 1][1];
+    /* Three tiers rather than two. Below the grey line there is not enough
+       chroma to call a hue at all; between there and the tint line the hue
+       is visible but the colour still reads as a neutral; above it, the
+       colour gets a proper name from its family. */
+    /* the grey line has to sit low, or genuinely tinted creams and
+       blue-greys get called plain grey */
+    var greyLine = 0.006 + 0.006 * L;
+    var tintLine = 0.030 + 0.020 * L;
+
+    if (C < greyLine) {
+      return GREY_N[neutralBand(L)];
+    }
+    if (C < tintLine) {
+      return TINT_N[neutralSector(H)][neutralBand(L)];
     }
 
     var fam = FAMILIES[0];
@@ -223,7 +274,12 @@
       if (f[0] < f[1]) { if (H >= f[0] && H < f[1]) { fam = f; break; } }
       else { if (H >= f[0] || H < f[1]) { fam = f; break; } }   /* the wrap */
     }
-    var band = L < 0.40 ? 0 : (L < 0.62 ? 1 : (L < 0.76 ? 2 : (L < 0.88 ? 3 : 4)));
+    /* Spaced to match where the generator actually puts colours, not
+       evenly. It solves ink lightness against a contrast target, which
+       piles colours into the very dark and very pale ends and leaves the
+       middle almost empty — with even bands, 46% of all inks were landing
+       in one of the five. */
+    var band = L < 0.30 ? 0 : (L < 0.40 ? 1 : (L < 0.80 ? 2 : (L < 0.90 ? 3 : 4)));
     var vivid = (C / Math.max(1e-4, maxChroma(L, H))) > 0.82 ? 1 : 0;
     return fam[3][band * 2 + vivid];
   };
