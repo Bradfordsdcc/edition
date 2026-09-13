@@ -58,230 +58,447 @@
     else { r = c; g = 0; b = x; }
     return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
   }
-  function toHex(rgb) {
-    return '#' + rgb.map(function (v) {
-      return ('0' + Math.max(0, Math.min(255, v)).toString(16)).slice(-2).toUpperCase();
-    }).join('');
-  }
-  function relLum(rgb) {
-    var v = rgb.map(function (c) {
-      c /= 255;
-      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-    });
-    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
-  }
-  function ratio(a, b) {
-    var L = Math.max(relLum(a), relLum(b)), S = Math.min(relLum(a), relLum(b));
-    return (L + 0.05) / (S + 0.05);
-  }
+  /* ============================================================
+     THE LIST
 
-  function make(minR, maxR) {
-    var hL = Math.floor(Math.random() * 360);
-    var hD = Math.floor(Math.random() * 360);
-    var light = hsv2rgb(hL, 0.04 + Math.random() * 0.42, 0.84 + Math.random() * 0.16);
-    var sD = 0.45 + Math.random() * 0.50;
-    var target = minR + Math.random() * (maxR - minR);
+     Palettes are drawn from these named colours rather than generated,
+     so every name is exactly right by construction — Khaki can only ever
+     appear on the actual Khaki. Editing this list is the whole
+     maintenance story: add a line, remove a line, nothing else changes.
 
-    /* bisect the dark member's value onto the target ratio */
-    var lo = 0.06, hi = 0.98, dark = null;
-    for (var i = 0; i < 26; i++) {
-      var mid = (lo + hi) / 2;
-      dark = hsv2rgb(hD, sD, mid);
-      if (ratio(dark, light) > target) lo = mid; else hi = mid;
-    }
-    dark = hsv2rgb(hD, sD, (lo + hi) / 2);
-
-    var r = ratio(dark, light);
-    if (r < minR || r > maxR) return null;
-    if (Math.max(dark[0], dark[1], dark[2]) < 58) return null;   /* would read as black */
-
-    var flip = Math.random() < 0.5;                              /* either may be the ground */
-    return { ink: toHex(flip ? light : dark), paper: toHex(flip ? dark : light),
-             r: r, flip: flip };
-  }
-
-  Edition.makePalette = function (minR, maxR) {
-    minR = minR || MIN_RATIO; maxR = maxR || MAX_RATIO;
-    for (var i = 0; i < 400; i++) {
-      var p = make(minR, maxR);
-      if (p) return p;
-    }
-    return { ink: '#141210', paper: '#F2EEE3', r: 15.5, flip: false };
-  };
-
-
-  /* ------------------------------------------------------------
-     Naming a generated colour.
-     Palettes are random hues, so names are derived: hue picks the
-     family, lightness picks which of its three names, and anything
-     with almost no saturation falls through to a neutral.
-     ------------------------------------------------------------ */
-  /* ------------------------------------------------------------
-     Naming a generated colour.
-
-     Hue is measured in OKLCH rather than HSL. HSL hue is
-     perceptually lopsided — the span from yellow to green covers
-     60 degrees there but only 32 perceptually — so evenly spaced
-     HSL families put yellow names on colours that are plainly
-     yellow-green. OKLCH is perceptually even, so a family boundary
-     lands where the eye puts it.
-
-     The families themselves are deliberately uneven in width,
-     sized to how finely people actually name each region: reds and
-     pinks get narrow bands, blues get wide ones.
-
-     Each family carries ten names — five lightness bands, each in a
-     muted and a vivid version.
-     ------------------------------------------------------------ */
-  var FAMILIES = [
-    [355, 12,'Rose',   ['Oxblood','Carmine','Bordeaux','Cerise','Tea Rose','Watermelon','Blush','Flamingo','Rose Water','Candy Floss']],
-    [ 12, 25,'Red',   ['Garnet','Ruby','Barn Red','Cherry','Clay Rose','Poppy','Rose Quartz','Coral Pink','Rose Milk','Peach Blossom']],
-    [ 25, 38,'Scarlet',   ['Maroon','Poppy Red','Brick','Vermilion','Salmon','Tomato','Conch','Peach','Seashell','Apricot Cream']],
-    [ 38, 50,'Ember',   ['Mahogany','Cinnabar','Rust','Persimmon','Melon','Papaya','Apricot','Sherbet','Peach Milk','Creamsicle']],
-    [ 50, 66,'Orange',   ['Umber','Burnt Orange','Clay','Tangerine','Sandstone','Marmalade','Buff','Cantaloupe','Bisque','Melon Cream']],
-    [ 66, 80,'Amber',   ['Bistre','Amber Gold','Ochre','Marigold','Fawn','Honey','Wheatgerm','Buttercup','Almond','Lemon Cream']],
-    [ 80, 95,'Gold',   ['Bronze','Old Gold','Mustard','Goldenrod','Wheat','Saffron','Vanilla','Sunflower','Custard','Daffodil']],
-    [ 95,118,'Yellow',   ['Olive Drab','Citrine','Khaki','Mustard Yellow','Straw','Chrome Yellow','Flax','Lemon','Butter','Citron']],
-    [118,130,'Lime',   ['Moss','Chartreuse','Olivine','Acid Green','Celadon','Key Lime','Lime Wash','Neon Lime','Pale Lime','Lime Zest']],
-    [130,145,'Green',   ['Loden','Kelly Green','Fern','Grass','Leaf','Spring Green','Pistachio','Electric Green','Verdure','Mint Ice']],
-    [145,160,'Emerald',   ['Pine','Viridian Green','Ivy','Shamrock','Eucalyptus','Jade','Honeydew','Mint','Spearmint','Peppermint']],
-    [160,185,'Sea',   ['Bottle','Malachite','Verdigris','Sea Green','Sea Glass','Aquamarine','Seafoam','Ice Green','Seaspray','Glacier Green']],
-    [185,205,'Teal',   ['Deep Teal','Viridian','Deep Cyan','Turquoise','Celadon Blue','Aqua','Powder','Ice Blue','Aqua Mist','Pool']],
-    [205,230,'Cyan',   ['Spruce','Petrol','Slate Cyan','Peacock','Mist Blue','Cerulean','Glacier','Powder Blue','Cloud Blue','Robin Egg']],
-    [230,250,'Sky',   ['Prussian','Azure','Steel Blue','Cornflower','Chambray','Sky Blue','Bluebell','Pale Azure','Cirrus Blue','Cirrus']],
-    [250,268,'Blue',   ['Navy','Sapphire','Denim','Cobalt','Wedgwood','Iris','Periwinkle','Alice Blue','Pale Iris','Forget Me Not']],
-    [268,285,'Indigo',   ['Midnight','Ultramarine','Slate Blue','Klein Blue','Dusk','Hyacinth','Lupine','Lilac Blue','Lavender Grey','Iris Mist']],
-    [285,305,'Violet',   ['Aubergine','Amethyst Violet','Heather','Amethyst','Lavender','Orchid','Lilac','Powder Violet','Orchid Mist','Violet Ice']],
-    [305,320,'Purple',   ['Plum','Byzantium','Mulberry','Grape','Thistle','Magenta Rose','Mauve','Powder Lilac','Dusty Lilac','Lilac Wash']],
-    [320,338,'Magenta',   ['Wine','Tyrian','Raspberry','Fuchsia','Peony','Magenta Pink','Cotton Candy','Bubblegum','Pink Pearl','Fairy Floss']],
-    [338,355,'Pink',   ['Merlot','Ruby Pink','Cranberry','Rose Red','Dusty Pink','Punch','Rose Wash','Ballet Pink','Shell Pink','Blossom']]
+     Values are the published ones where a published one exists.
+     ============================================================ */
+  var LIST = [
+    'Prussian Blue #003366',
+    'Viridian #1E9167',
+    'Alizarin #E32636',
+    'Cadmium Red #E30022',
+    'Cadmium Yellow #FFF600',
+    'Cadmium Orange #ED872D',
+    'Ultramarine #1805DB',
+    'Vermilion #F4320C',
+    'Payne\'s Grey #536878',
+    'Naples Yellow #FADA5F',
+    'Rose Madder #E33636',
+    'Burnt Sienna #A93400',
+    'Raw Sienna #9A6200',
+    'Raw Umber #A75E09',
+    'Burnt Umber #8A3324',
+    'Yellow Ochre #C39143',
+    'Venetian Red #C80815',
+    'Van Dyke Brown #664228',
+    'Malachite #0BDA51',
+    'Lapis Lazuli #26619C',
+    'Verdigris #43B3AE',
+    'Tyrian Purple #66023C',
+    'Han Purple #5218FA',
+    'Egyptian Blue #1034A6',
+    'Maya Blue #73C2FB',
+    'Paris Green #50C87C',
+    'Chrome Yellow #FFA700',
+    'Sap Green #5C8B15',
+    'Titanium White #E4E4E4',
+    'Gamboge #E49B0F',
+    'Sepia #704214',
+    'Bistre #3D2B1F',
+    'Carmine #D60036',
+    'Cerulean Blue #2A52BE',
+    'Cobalt #030AA7',
+    'Phthalo Blue #000F89',
+    'Phthalo Green #123524',
+    'Hansa Yellow #E9D66C',
+    'Smalt #003399',
+    'Vermillion #E34234',
+    'Lead White #F2F0E6',
+    'Bone Black #3B3229',
+    'Charcoal Grey #4A4A4A',
+    'Indigo #4B0082',
+    'Woad #3F5C8C',
+    'Madder #754C50',
+    'Cochineal #953B45',
+    'Saffron #F4C430',
+    'Orpiment #F9C80E',
+    'Azurite #2E5894',
+    'Terre Verte #6B7C5B',
+    'Celadon Green #2F847C',
+    'Ochre #CC7722',
+    'Sanguine #6C110E',
+    'Umber #B26400',
+    'Sienna #A9561E',
+    'Ivory Black #231F20',
+    'Mars Black #1C1C1C',
+    'Mars Red #C92A37',
+    'Quinacridone #8E3A59',
+    'Emerald Green #046307',
+    'Scheele Green #4C9141',
+    'Cinnabar #730113',
+    'Minium #D94E1F',
+    'Lampblack #1B1B1B',
+    'British Racing Green #05480D',
+    'International Klein Blue #002FA6',
+    'Majorelle Blue #6050DC',
+    'Isabelline #F4F0EC',
+    'Davy\'s Grey #535554',
+    'Delft Blue #3311EE',
+    'Byzantium #702963',
+    'Wedgewood Blue #5A7D9A',
+    'Pompeian Red #A82A38',
+    'Van Gogh Yellow #F2C12E',
+    'Rembrandt Brown #5A4632',
+    'Titian Red #BD5620',
+    'Veronese Green #4F7942',
+    'Bordeaux #7B002C',
+    'Havana #3B2B2C',
+    'Siena #A0522D',
+    'Sevres Blue #1F4E9C',
+    'Capri Blue #0091C8',
+    'Amalfi #016E85',
+    'Marrakesh #C9622E',
+    'Mykonos Blue #005780',
+    'Provence #658DC6',
+    'Tuscany #B98C7B',
+    'Egyptian Gold #EFA84C',
+    'Moroccan Blue #115674',
+    'Copenhagen Blue #21638B',
+    'Bristol Blue #558F91',
+    'Oxford Blue #002147',
+    'Cambridge Blue #A3C1AD',
+    'Eton Blue #AAD4D1',
+    'Harvard Crimson #C90016',
+    'Yale Blue #0F4D92',
+    'Princeton Orange #FF8F00',
+    'International Orange #BA160C',
+    'Safety Orange #FF6600',
+    'Safety Yellow #EED202',
+    'Air Force Blue #5D8AA8',
+    'Rifle Green #414833',
+    'Bottle Green #006A4E',
+    'Imperial Red #EC2938',
+    'Royal Blue #4169E1',
+    'Navy Blue #000080',
+    'Regimental #2F3E56',
+    'Military Green #667C3E',
+    'Army Green #4B5320',
+    'Cadet Blue #5F9EA0',
+    'Cardinal #C41E3A',
+    'Sable #784841',
+    'Argent #888888',
+    'Tenne #CD5700',
+    'Field Drab #6C541E',
+    'Marine Blue #01386A',
+    'Federal Blue #43628B',
+    'Fluorescent Pink #FE1493',
+    'Fluorescent Green #08FF08',
+    'Aqua #0FF0FE',
+    'Bright Red #FF000D',
+    'Kelly Green #339C5E',
+    'Sunflower #FFC512',
+    'Hunter Green #0B4008',
+    'Crimson #8C000F',
+    'Scarlet #FF2400',
+    'Medium Blue #0000CD',
+    'Mint #3EB489',
+    'Cornflower #5170D7',
+    'Light Teal #B1CCC5',
+    'Brick Red #8F1402',
+    'Lake #92CDCC',
+    'Moss Green #6A7F3C',
+    'Metallic Gold #D4AF37',
+    'Orchid #7A81FF',
+    'Violet #9A0EEA',
+    'Flat Gold #B59A3B',
+    'Light Lime #C8E04A',
+    'Coral #FF7F50',
+    'Sea Blue #006994',
+    'Cranberry #9E003A',
+    'Charcoal #343837',
+    'Melon #FF7855',
+    'Sakura #DFB1B6',
+    'Asagi Blue #48929B',
+    'Ivory #FFFFF0',
+    'Chalk #EDEAE5',
+    'Alabaster #F3E7DB',
+    'Porcelain #DDDCDB',
+    'Eggshell #F0EAD6',
+    'Cream #FFFFC2',
+    'Vanilla #F3E5AB',
+    'Parchment #FEFCAF',
+    'Linen #FAF0E6',
+    'Bone #E0D7C6',
+    'Pearl #EAE0C8',
+    'Snow #FFFAFA',
+    'Frost #E1E4C5',
+    'Fog #D6D7D2',
+    'Dove #B3ADA7',
+    'Putty #CDAE70',
+    'Straw #E4D96F',
+    'Wheat #FBDD7E',
+    'Honey #AE8934',
+    'Butter #FFFF81',
+    'Lemon #FFF700',
+    'Citron #D5C757',
+    'Celadon #ACE1AF',
+    'Beige #E6DAA6',
+    'Ecru #C2B280',
+    'Oyster #E3D3BF',
+    'Champagne #E9D2AC',
+    'Buttermilk #FFFEE4',
+    'Meringue #F3E4B3',
+    'Seashell #FFF5EE',
+    'Bisque #FFE4C4',
+    'Almond #EDDCC8',
+    'Oatmeal #C9C1B1',
+    'Blush #F29E8E',
+    'Peach #FFB07C',
+    'Apricot #FFB16D',
+    'Salmon #FF796C',
+    'Powder Blue #B0E0E6',
+    'Baby Blue #A2CFFE',
+    'Sky Blue #9FB9E2',
+    'Periwinkle #8E82FE',
+    'Lilac #CEA2FD',
+    'Lavender #B56EDC',
+    'Thistle #D8BFD8',
+    'Mauve #E0B0FF',
+    'Pistachio #93C572',
+    'Mint Green #487D4A',
+    'Seafoam #93E9BE',
+    'Sage #87AE73',
+    'Willow #8C7A48',
+    'Glacier #78B1BF',
+    'Ice Blue #739BD0',
+    'Platinum #E5E4E2',
+    'Silver #C0C0C0',
+    'Ash Grey #C1B5A9',
+    'Pale Gold #FDDE6C',
+    'Buff #F0DC82',
+    'Sand #E2CA76',
+    'Taupe #B9A281',
+    'Greige #B0A999',
+    'Khaki #C3B091',
+    'Olive #808010',
+    'Teal #008080',
+    'Mustard #CEB301',
+    'Terracotta #CB6843',
+    'Clay #B66A50',
+    'Rust #A83C09',
+    'Copper #B87333',
+    'Bronze #A87900',
+    'Amber #FFBF00',
+    'Marigold #FCC006',
+    'Tangerine #FF9300',
+    'Persimmon #E59B34',
+    'Poppy #C23C47',
+    'Coral Pink #F88379',
+    'Rose #FF007F',
+    'Cerise #AD134E',
+    'Raspberry #B00149',
+    'Cherry #CF0234',
+    'Magenta #FF00FF',
+    'Fuchsia #ED0DD9',
+    'Orchid Purple #9A5BA8',
+    'Amethyst #9966CC',
+    'Heather #A484AC',
+    'Wisteria #A87DC2',
+    'Denim #2243B6',
+    'Slate Blue #5A6B8C',
+    'Steel Blue #4682B4',
+    'Cobalt Blue #0047AB',
+    'Peacock Blue #016795',
+    'Turquoise Blue #00FFEF',
+    'Jade #00A86B',
+    'Fern #548D44',
+    'Moss #009051',
+    'Basil #879F84',
+    'Avocado #568203',
+    'Chartreuse #C1F80A',
+    'Lime #AAFF32',
+    'Shamrock #009E60',
+    'Kelly #4CBB17',
+    'Pewter #91A092',
+    'Gunmetal #536267',
+    'Stone #ADA587',
+    'Camel #C69F59',
+    'Fawn #CFAF7B',
+    'Caramel #AF6F09',
+    'Toffee #755139',
+    'Cinnamon #D26911',
+    'Paprika Red #B5432F',
+    'Brick #A03623',
+    'Sienna Brown #8A5A44',
+    'Chestnut #742802',
+    'Walnut #773F1A',
+    'Hazel #A36B4B',
+    'Bronze Green #8D8752',
+    'Verdigris Green #61AC86',
+    'Petrol #005F6A',
+    'Lagoon #4B9B93',
+    'Midnight #03012D',
+    'Maroon #800000',
+    'Oxblood #800020',
+    'Claret #680018',
+    'Wine #80013F',
+    'Mulberry #920A4E',
+    'Plum #66386A',
+    'Aubergine #372528',
+    'Damson #854C65',
+    'Blackberry #43182F',
+    'Espresso #4E312D',
+    'Coffee #6F4E37',
+    'Chocolate #D2691E',
+    'Cocoa #875F42',
+    'Mahogany #C04000',
+    'Ebony #313337',
+    'Onyx #464544',
+    'Obsidian #445055',
+    'Jet #343434',
+    'Soot #555E5F',
+    'Ink #1B1B2F',
+    'Graphite #383428',
+    'Charcoal Black #232326',
+    'Slate #516572',
+    'Anthracite #28282D',
+    'Pine #2B5D34',
+    'Forest #0B5509',
+    'Spruce #0A5F38',
+    'Juniper #74918E',
+    'Cypress #585D40',
+    'Bottle #093624',
+    'Racing Green #014600',
+    'Prussian #3F585F',
+    'Navy #01153E',
+    'Marine #042E60',
+    'Abyss #8F9E9D',
+    'Indigo Blue #3A18B1',
+    'Ultramarine Blue #657ABB',
+    'Aubergine Purple #472C3E',
+    'Imperial Purple #5B3167',
+    'Eggplant #430541',
+    'Garnet #733635',
+    'Ruby #CA0147',
+    'Sangria #B14566',
+    'Merlot #730039',
+    'Cordovan #893F45',
+    'Chocolate Brown #4A2C2A',
+    'Peat #766D52',
+    'Bitumen #2B2018',
+    'City Design Navy #1B3F52',
+    'City Design Teal #54C2D3',
+    'City Design Yellow #F4DF05',
+    'City Design Red #EE412E',
+    'Tiffany Blue #7BF2DA',
+    'Barbie Pink #FE46A5',
+    'Terminal Green #33FF33',
+    'Hyperlink Blue #0000EE',
+    'Matrix Green #70F15E',
+    'Process Cyan #00AEEF',
+    'Process Magenta #EC008C',
+    'Process Yellow #FFF200',
+    'Rubylith Red #C8102E',
+    'Cyanotype Blue #1A4B84',
+    'Kraft Paper #A98B62',
+    'Newsprint #C8C4BC',
+    'Legal Pad #FFF9AE',
+    'Pinkest Pink #FF00CC',
+    'Black 3.0 #030303',
+    'Yoshi Green #6FBF4A',
+    'Kirby Pink #D74894',
+    'Pikachu Yellow #FFCB05',
+    'Nintendo Red #E60012',
+    'Kuromi Purple #8260A2',
+    'Pompompurin Yellow #FFF9B0',
+    'Akira Red #D7262F',
+    'Brat Green #8ACE00',
+    'Discord Blurple #5865F2',
+    'Vaporwave Pink #FF71CE',
+    'Millennial Pink #F3CFC6',
+    'Traffic Cone #FF5800',
+    'Tennis Ball #CCFF00',
   ];
-  /* Neutrals carry about a sixth of every colour the generator makes, and
-     used to share only fifteen names — so Chalk alone was seven percent of
-     all output. They now work in two layers.
 
-     A colour with essentially no chroma gets a true grey name. A colour
-     with a faint tint keeps its hue but is still named as a neutral, in
-     one of six hue sectors, which is what separates a pale green-grey
-     from a pale blue-grey instead of calling both Mist. */
-  var GREY_N = ['Ink','Soot','Charcoal','Graphite','Slate','Steel',
-                'Ash','Silver','Pearl','Chalk','Snow'];
 
-  var TINT_N = {
-    red:    ['Pitch','Clove','Cocoa','Rosewood','Dusty Rose','Blush Grey',
-             'Shell','Powder Rose','Porcelain','Petal','Whisper'],
-    yellow: ['Peat','Espresso','Bark','Drab','Taupe','Putty',
-             'Oat','Cream','Eggshell','Ivory','Parchment'],
-    green:  ['Pine Grey','Fern Grey','Moss Grey','Sage Grey','Sage','Pale Sage',
-             'Willow','Green Tea','Tea Wash','Dew','Mint Wash'],
-    cyan:   ['Abyss','Deep Slate','Teal Grey','Slate Teal','Mineral','Sea Mist',
-             'Vapour','Glass','Frost','Ice','Aqua Wash'],
-    blue:   ['Midnight Grey','Gunmetal','Payne Grey','Denim Grey','Bluestone','Dove',
-             'Mist','Cloud','Alabaster','Moonstone','Sky Wash'],
-    violet: ['Aubergine Grey','Iron Violet','Mauve Grey','Heather Grey','Lilac Grey',
-             'Orchid Grey','Wisteria','Lavender Mist','Opal','Iris Wash','Violet Wash']
-  };
-  var TINT_SECTORS = [
-    [345, 25, 'red'], [25, 95, 'yellow'], [95, 165, 'green'],
-    [165, 240, 'cyan'], [240, 290, 'blue'], [290, 345, 'violet']
-  ];
-  /* Eleven steps, bunched at the pale end. Papers are generated between
-     84 and 100 percent value, so almost all of them used to land in one
-     band — which is why three names were carrying a sixth of the output. */
-  var NEUTRAL_STEPS = [0.16, 0.28, 0.40, 0.52, 0.63, 0.72,
-                       0.80, 0.87, 0.92, 0.96, 1.01];
-
-  function neutralSector(h) {
-    for (var i = 0; i < TINT_SECTORS.length; i++) {
-      var a = TINT_SECTORS[i][0], b = TINT_SECTORS[i][1];
-      if (a < b) { if (h >= a && h < b) return TINT_SECTORS[i][2]; }
-      else { if (h >= a || h < b) return TINT_SECTORS[i][2]; }
-    }
-    return 'yellow';
-  }
-  function neutralBand(L) {
-    for (var i = 0; i < NEUTRAL_STEPS.length; i++) if (L < NEUTRAL_STEPS[i]) return i;
-    return NEUTRAL_STEPS.length - 1;
-  }
+  /* Contrast band a pair has to fall inside. 4.5 is the WCAG AA floor and
+     the level any audit actually checks. Raising the lower bound to 7
+     would meet AAA but drops every mid-luminance colour from the list —
+     a colour sitting in the middle is close to both ends, so it cannot
+     reach 7:1 against anything at all. */
+  var MIN_RATIO = 4.5;
+  var MAX_RATIO = 21;
 
   function hexToRgb(h) {
     h = h.replace('#', '');
-    return [0, 2, 4].map(function (i) { return parseInt(h.substr(i, 2), 16); });
+    return [parseInt(h.substr(0, 2), 16),
+            parseInt(h.substr(2, 2), 16),
+            parseInt(h.substr(4, 2), 16)];
   }
-  function toLinear(c) {
-    c /= 255;
-    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  function relLum(rgb) {
+    var a = rgb.map(function (v) {
+      v /= 255;
+      return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
   }
-  function toOklch(rgb) {
-    var r = toLinear(rgb[0]), g = toLinear(rgb[1]), b = toLinear(rgb[2]);
-    var l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
-    var m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
-    var s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
-    var l_ = Math.cbrt(l), m_ = Math.cbrt(m), s_ = Math.cbrt(s);
-    var L = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_;
-    var A = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
-    var B = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
-    var H = Math.atan2(B, A) * 180 / Math.PI;
-    if (H < 0) H += 360;
-    return [L, Math.hypot(A, B), H];
+  function ratio(la, lb) {
+    var hi = Math.max(la, lb), lo = Math.min(la, lb);
+    return (hi + 0.05) / (lo + 0.05);
   }
-  function oklchInGamut(L, C, H) {
-    var h = H * Math.PI / 180, a = C * Math.cos(h), b = C * Math.sin(h);
-    var l_ = L + 0.3963377774 * a + 0.2158037573 * b;
-    var m_ = L - 0.1055613458 * a - 0.0638541728 * b;
-    var s_ = L - 0.0894841775 * a - 1.2914855480 * b;
-    var l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
-    var lr =  4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
-    var lg = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
-    var lb = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
-    return lr >= -0.001 && lr <= 1.001 && lg >= -0.001 && lg <= 1.001 &&
-           lb >= -0.001 && lb <= 1.001;
-  }
-  /* how much chroma is actually reachable at this lightness and hue —
-     "vivid" only means anything relative to what is possible */
-  function maxChroma(L, H) {
-    var lo = 0, hi = 0.45;
-    for (var i = 0; i < 22; i++) {
-      var mid = (lo + hi) / 2;
-      if (oklchInGamut(L, mid, H)) lo = mid; else hi = mid;
-    }
-    return lo;
-  }
+  Edition.contrast = function (a, b) {
+    return ratio(relLum(hexToRgb(a)), relLum(hexToRgb(b)));
+  };
 
+  /* Parsed once. Every pair inside the band is worked out at load — about
+     sixty thousand comparisons, which costs a millisecond — so picking a
+     palette afterwards is a single array lookup and every pair is equally
+     likely. */
+  var COLORS = [], PAIRS = [], BY_HEX = {};
+  (function buildIndex() {
+    for (var i = 0; i < LIST.length; i++) {
+      var s = LIST[i].trim();
+      if (!s) continue;
+      var cut = s.lastIndexOf(' ');
+      var name = s.slice(0, cut).trim();
+      var hex = s.slice(cut + 1).trim().toUpperCase();
+      if (!/^#[0-9A-F]{6}$/.test(hex)) continue;
+      var c = { name: name, hex: hex, L: relLum(hexToRgb(hex)) };
+      COLORS.push(c);
+      BY_HEX[hex] = name;
+    }
+    for (var a = 0; a < COLORS.length; a++) {
+      for (var b = a + 1; b < COLORS.length; b++) {
+        var r = ratio(COLORS[a].L, COLORS[b].L);
+        if (r >= MIN_RATIO && r <= MAX_RATIO) PAIRS.push([a, b, r]);
+      }
+    }
+  })();
+  Edition.colors = COLORS;
+  Edition.pairCount = function () { return PAIRS.length; };
+
+  /* A name is a lookup, not a guess. Anything not in the list — someone
+     setting a colour by hand — falls back to the nearest entry. */
   Edition.nameColor = function (hex) {
-    var lch = toOklch(hexToRgb(hex));
-    var L = lch[0], C = lch[1], H = lch[2];
-
-    /* Three tiers rather than two. Below the grey line there is not enough
-       chroma to call a hue at all; between there and the tint line the hue
-       is visible but the colour still reads as a neutral; above it, the
-       colour gets a proper name from its family. */
-    /* the grey line has to sit low, or genuinely tinted creams and
-       blue-greys get called plain grey */
-    var greyLine = 0.006 + 0.006 * L;
-    var tintLine = 0.030 + 0.020 * L;
-
-    if (C < greyLine) {
-      return GREY_N[neutralBand(L)];
+    hex = String(hex).trim().toUpperCase();
+    if (BY_HEX[hex]) return BY_HEX[hex];
+    var t = hexToRgb(hex), best = null, bd = Infinity;
+    for (var i = 0; i < COLORS.length; i++) {
+      var c = hexToRgb(COLORS[i].hex);
+      var d = (c[0] - t[0]) * (c[0] - t[0]) +
+              (c[1] - t[1]) * (c[1] - t[1]) +
+              (c[2] - t[2]) * (c[2] - t[2]);
+      if (d < bd) { bd = d; best = COLORS[i]; }
     }
-    if (C < tintLine) {
-      return TINT_N[neutralSector(H)][neutralBand(L)];
-    }
+    return best ? best.name : hex;
+  };
 
-    var fam = FAMILIES[0];
-    for (var k = 0; k < FAMILIES.length; k++) {
-      var f = FAMILIES[k];
-      if (f[0] < f[1]) { if (H >= f[0] && H < f[1]) { fam = f; break; } }
-      else { if (H >= f[0] || H < f[1]) { fam = f; break; } }   /* the wrap */
-    }
-    /* Spaced to match where the generator actually puts colours, not
-       evenly. It solves ink lightness against a contrast target, which
-       piles colours into the very dark and very pale ends and leaves the
-       middle almost empty — with even bands, 46% of all inks were landing
-       in one of the five. */
-    var band = L < 0.30 ? 0 : (L < 0.40 ? 1 : (L < 0.80 ? 2 : (L < 0.90 ? 3 : 4)));
-    var vivid = (C / Math.max(1e-4, maxChroma(L, H))) > 0.82 ? 1 : 0;
-    return fam[3][band * 2 + vivid];
+  Edition.makePalette = function () {
+    var p = PAIRS[Math.floor(Math.random() * PAIRS.length)];
+    var a = COLORS[p[0]], b = COLORS[p[1]];
+    /* either member can be the ground, so about half of all visits come
+       out light on dark */
+    var flip = Math.random() < 0.5;
+    var paper = (a.L > b.L) ? a : b;
+    var ink = (a.L > b.L) ? b : a;
+    if (flip) { var t = paper; paper = ink; ink = t; }
+    return { ink: ink.hex, paper: paper.hex, r: p[2], flip: flip };
   };
 
   /* ------------------------------------------------------------
