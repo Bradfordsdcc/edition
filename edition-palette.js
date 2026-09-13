@@ -217,6 +217,7 @@
     'Alabaster #F3E7DB',
     'Porcelain #DDDCDB',
     'Eggshell #F0EAD6',
+    'Nonbinary Purple #9C59D1',
     'Cream #FFFFC2',
     'Vanilla #F3E5AB',
     'Parchment #FEFCAF',
